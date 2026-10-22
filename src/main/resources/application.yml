@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: backend
+
+  # ${ENV_NAME:기본값} — 환경변수가 없으면 기본값(로컬 docker compose 값) 사용
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:jkymhs}?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    username: ${DB_USERNAME:jkymhs}
+    password: ${DB_PASSWORD:jkymhs}
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    properties:
+      hibernate:
+        format_sql: true
+    show-sql: ${JPA_SHOW_SQL:true}
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
