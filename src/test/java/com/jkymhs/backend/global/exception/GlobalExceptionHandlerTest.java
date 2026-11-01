@@ -147,6 +147,15 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    @DisplayName("클라이언트가 JSON을 요청하지 않아도 에러 응답은 JSON으로 내려준다")
+    void errorBodyIsJsonRegardlessOfAccept() throws Exception {
+        mockMvc.perform(get("/test/redis").accept(MediaType.APPLICATION_XML))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.status").value(503));
+    }
+
+    @Test
     @DisplayName("예상하지 못한 예외는 500으로 응답하고 내부 메시지를 노출하지 않는다")
     void unexpectedException() throws Exception {
         mockMvc.perform(get("/test/unexpected"))

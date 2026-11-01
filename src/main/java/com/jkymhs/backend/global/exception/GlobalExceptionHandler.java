@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
@@ -93,7 +94,11 @@ public class GlobalExceptionHandler {
         return toResponse(body, HttpHeaders.EMPTY);
     }
 
+    // Content-Type을 JSON으로 고정해야 Accept 헤더와 상관없이 에러 본문이 항상 내려간다
     private ResponseEntity<ErrorResponse> toResponse(ErrorResponse body, HttpHeaders headers) {
-        return ResponseEntity.status(body.status()).headers(headers).body(body);
+        return ResponseEntity.status(body.status())
+                .headers(headers)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body);
     }
 }
