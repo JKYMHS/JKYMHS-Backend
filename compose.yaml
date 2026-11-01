@@ -1,4 +1,4 @@
-# 로컬 개발용 MySQL + Redis
+# 로컬 개발용 MySQL + Redis + Mailpit
 # 실행: docker compose up -d / 종료: docker compose down (데이터 삭제까지: down -v)
 services:
   mysql:
@@ -23,6 +23,14 @@ services:
     container_name: jkymhs-redis
     ports:
       - "6379:6379"
+
+  # 메일을 실제로 보내지 않고 가로채서 보여주는 개발용 SMTP 서버. 받은 메일은 http://localhost:8025 에서 확인
+  mailpit:
+    image: axllent/mailpit:v1.33.0
+    container_name: jkymhs-mailpit
+    ports:
+      - "1025:1025" # SMTP
+      - "8025:8025" # 웹 화면
 
 volumes:
   mysql-data:
