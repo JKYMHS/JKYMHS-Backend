@@ -1,0 +1,9 @@
+# @ActiveProfiles("test")인 테스트에서만 쓰는 설정. DB·Redis 주소는 Testcontainers가 넣어준다
+jwt:
+  secret: test-jwt-secret-key-at-least-32-characters-long
+  access-token-expiration: 30m
+  refresh-token-expiration: 14d
+
+spring:
+  jpa:
+    show-sql: false
