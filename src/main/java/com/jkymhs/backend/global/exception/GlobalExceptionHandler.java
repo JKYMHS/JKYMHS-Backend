@@ -3,6 +3,7 @@ package com.jkymhs.backend.global.exception;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.data.redis.RedisConnectionFailureException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
@@ -57,7 +58,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public ResponseEntity<ErrorResponse> handleMethodNotAllowed(HttpRequestMethodNotSupportedException e) {
-        return toResponse(ErrorResponse.of(ErrorCode.METHOD_NOT_ALLOWED, e.getMethod() + " 메서드는 지원하지 않습니다."));
+        ErrorResponse body = ErrorResponse.of(ErrorCode.METHOD_NOT_ALLOWED, e.getMethod() + " 메서드는 지원하지 않습니다.");
+        return toResponse(body, e.getHeaders());
     }
 
     @ExceptionHandler({RedisConnectionFailureException.class, QueryTimeoutException.class})
@@ -68,11 +70,30 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleException(Exception e) {
+        if (e instanceof org.springframework.web.ErrorResponse springError
+                && springError.getStatusCode().is4xxClientError()) {
+            return handleSpringClientError(springError);
+        }
         log.error("Unhandled exception", e);
         return toResponse(ErrorResponse.of(ErrorCode.INTERNAL_SERVER_ERROR, "서버 내부 오류"));
     }
 
+    // 위에서 따로 잡지 않은 스프링 MVC 클라이언트 오류(415, 406 등)는 원래 상태코드와 헤더를 유지한다
+    private ResponseEntity<ErrorResponse> handleSpringClientError(org.springframework.web.ErrorResponse springError) {
+        String detail = springError.getBody().getDetail();
+        ErrorResponse body = ErrorResponse.of(
+                springError.getStatusCode(),
+                ErrorCode.INVALID_INPUT.getMessage(),
+                detail != null ? detail : "요청 형식이 올바르지 않습니다."
+        );
+        return toResponse(body, springError.getHeaders());
+    }
+
     private ResponseEntity<ErrorResponse> toResponse(ErrorResponse body) {
-        return ResponseEntity.status(body.status()).body(body);
+        return toResponse(body, HttpHeaders.EMPTY);
+    }
+
+    private ResponseEntity<ErrorResponse> toResponse(ErrorResponse body, HttpHeaders headers) {
+        return ResponseEntity.status(body.status()).headers(headers).body(body);
     }
 }

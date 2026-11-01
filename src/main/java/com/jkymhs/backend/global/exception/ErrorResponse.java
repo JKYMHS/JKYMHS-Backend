@@ -1,5 +1,7 @@
 package com.jkymhs.backend.global.exception;
 
+import org.springframework.http.HttpStatusCode;
+
 import java.time.LocalDateTime;
 
 public record ErrorResponse(
@@ -14,6 +16,10 @@ public record ErrorResponse(
     }
 
     public static ErrorResponse of(ErrorCode errorCode, String message, String description) {
-        return new ErrorResponse(message, errorCode.getStatus().value(), LocalDateTime.now(), description);
+        return of(errorCode.getStatus(), message, description);
+    }
+
+    public static ErrorResponse of(HttpStatusCode status, String message, String description) {
+        return new ErrorResponse(message, status.value(), LocalDateTime.now(), description);
     }
 }

@@ -2,6 +2,7 @@ package com.jkymhs.backend.global.exception;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -25,6 +26,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -106,12 +108,33 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    @DisplayName("지원하지 않는 메서드는 405로 응답한다")
+    @DisplayName("지원하지 않는 메서드는 405와 허용 메서드(Allow 헤더)로 응답한다")
     void methodNotAllowed() throws Exception {
         mockMvc.perform(delete("/test/custom"))
                 .andExpect(status().isMethodNotAllowed())
+                .andExpect(header().string("Allow", containsString("GET")))
                 .andExpect(jsonPath("$.status").value(405))
                 .andExpect(jsonPath("$.description").value("DELETE 메서드는 지원하지 않습니다."));
+    }
+
+    @Test
+    @DisplayName("지원하지 않는 Content-Type은 500이 아니라 415로 응답한다")
+    void unsupportedMediaType() throws Exception {
+        mockMvc.perform(post("/test/valid")
+                        .contentType(MediaType.TEXT_PLAIN)
+                        .content("hello"))
+                .andExpect(status().isUnsupportedMediaType())
+                .andExpect(jsonPath("$.message").value("입력값이 올바르지 않습니다."))
+                .andExpect(jsonPath("$.status").value(415));
+    }
+
+    @Test
+    @DisplayName("파라미터 검증(@Min)에 실패하면 500이 아니라 400으로 응답한다")
+    void parameterValidationFailure() throws Exception {
+        mockMvc.perform(get("/test/positive").param("value", "0"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("입력값이 올바르지 않습니다."))
+                .andExpect(jsonPath("$.status").value(400));
     }
 
     @Test
@@ -159,6 +182,10 @@ class GlobalExceptionHandlerTest {
 
         @GetMapping("/param")
         void param(@RequestParam Long id) {
+        }
+
+        @GetMapping("/positive")
+        void positive(@RequestParam @Min(1) int value) {
         }
 
         @GetMapping("/redis")
