@@ -110,9 +110,10 @@ public class EmailVerificationService {
         long attempt = (Long) result.get(0);
         String savedCode = (String) result.get(1);
 
-        // 동시에 들어온 다른 요청들이 이미 5번을 다 쓴 경우
+        // 동시에 들어온 다른 요청들이 이미 5번을 다 쓴 경우. 키는 지우지 않는다.
+        // 여기서 지우면 먼저 들어온 요청이 맞는 코드를 들고 있어도 아래 삭제에 실패해서 아무도 토큰을 못 받는다.
+        // 키는 맞는 코드를 든 요청이나 5번째로 틀린 요청이 지운다
         if (attempt > MAX_ATTEMPTS) {
-            redisTemplate.delete(key);
             throw codeExpired();
         }
 
