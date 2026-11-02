@@ -64,6 +64,7 @@ class LoginApiTest extends IntegrationTestSupport {
 
         login(EMAIL, WRONG_PASSWORD)
                 .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"))
                 .andExpect(jsonPath("$.message").value(INVALID_CREDENTIALS_MESSAGE));
 
         assertThat(failCount(EMAIL)).isEqualTo("1");
@@ -93,6 +94,7 @@ class LoginApiTest extends IntegrationTestSupport {
 
         login(EMAIL, PASSWORD)
                 .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("GOOGLE_ONLY_ACCOUNT"))
                 .andExpect(jsonPath("$.message").value("구글로 가입한 계정입니다. 구글 로그인을 이용해주세요."));
 
         assertThat(redisTemplate.hasKey(AuthRedisKeys.loginFail(EMAIL))).isFalse();
@@ -108,6 +110,7 @@ class LoginApiTest extends IntegrationTestSupport {
 
         login(EMAIL, WRONG_PASSWORD)
                 .andExpect(status().isLocked())
+                .andExpect(jsonPath("$.code").value("LOGIN_LOCKED"))
                 .andExpect(jsonPath("$.message").value(LOCKED_MESSAGE))
                 .andExpect(jsonPath("$.description").value(startsWith("잠금 해제 시각: ")));
     }
@@ -138,6 +141,7 @@ class LoginApiTest extends IntegrationTestSupport {
 
         login(EMAIL, PASSWORD)
                 .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.code").value("TOO_MANY_REQUESTS"))
                 .andExpect(jsonPath("$.message").value("잠시 후 다시 시도해주세요."));
         assertThat(redisTemplate.opsForValue().get(AuthRedisKeys.rateLimit(RateLimitType.LOGIN, DEFAULT_IP))).isEqualTo("21");
     }

@@ -120,6 +120,7 @@ class SignupApiTest extends IntegrationTestSupport {
 
         signup(EMAIL, "wrong-token", PASSWORD, CONSENTS)
                 .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("EMAIL_NOT_VERIFIED"))
                 .andExpect(jsonPath("$.message").value("이메일 인증이 만료되었습니다. 다시 인증해주세요."));
 
         assertThat(userRepository.count()).isZero();
@@ -186,6 +187,7 @@ class SignupApiTest extends IntegrationTestSupport {
 
         signup(EMAIL, verificationToken, PASSWORD, CONSENTS)
                 .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("EMAIL_ALREADY_EXISTS"))
                 .andExpect(jsonPath("$.message").value("이미 가입된 이메일입니다."));
 
         assertThat(userRepository.count()).isEqualTo(1);

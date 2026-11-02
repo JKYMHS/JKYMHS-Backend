@@ -153,6 +153,7 @@ class GoogleAuthControllerTest extends IntegrationTestSupport {
 
             googleLogin()
                     .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.code").value("GOOGLE_AUTH_FAILED"))
                     .andExpect(jsonPath("$.message").value("구글 인증에 실패했습니다. 다시 시도해주세요."))
                     .andExpect(jsonPath("$.description").value("인가 코드 만료·재사용"));
 
@@ -167,6 +168,7 @@ class GoogleAuthControllerTest extends IntegrationTestSupport {
 
             googleLogin()
                     .andExpect(status().isBadGateway())
+                    .andExpect(jsonPath("$.code").value("GOOGLE_SERVER_ERROR"))
                     .andExpect(jsonPath("$.message").value("구글 서버와 통신하지 못했습니다."));
         }
 
@@ -222,6 +224,7 @@ class GoogleAuthControllerTest extends IntegrationTestSupport {
 
             link(linkToken, "wrong-password")
                     .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.code").value("INVALID_LINK_PASSWORD"))
                     .andExpect(jsonPath("$.message").value("비밀번호가 올바르지 않습니다."));
 
             assertThat(redisTemplate.opsForHash().get(AuthRedisKeys.loginFail(EMAIL), "failCount")).isEqualTo("1");
@@ -278,6 +281,7 @@ class GoogleAuthControllerTest extends IntegrationTestSupport {
 
             link(linkToken, PASSWORD)
                     .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("GOOGLE_ACCOUNT_ALREADY_LINKED"))
                     .andExpect(jsonPath("$.message").value("다른 계정에 이미 연결된 구글 계정입니다."));
 
             assertThat(userRepository.findById(user.getId()).orElseThrow().isGoogleLinked()).isFalse();

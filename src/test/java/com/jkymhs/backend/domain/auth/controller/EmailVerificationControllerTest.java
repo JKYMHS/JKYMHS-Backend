@@ -104,6 +104,7 @@ class EmailVerificationControllerTest extends IntegrationTestSupport {
 
         send(EMAIL, VerificationPurpose.SIGNUP)
                 .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("EMAIL_ALREADY_EXISTS"))
                 .andExpect(jsonPath("$.message").value("이미 가입된 이메일입니다."));
 
         verifyNoInteractions(mailSender);
@@ -176,6 +177,7 @@ class EmailVerificationControllerTest extends IntegrationTestSupport {
 
         send("user6@example.com", VerificationPurpose.SIGNUP, ip)
                 .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.code").value("TOO_MANY_REQUESTS"))
                 .andExpect(jsonPath("$.description").value("IP 요청 제한 초과"));
         // 다른 IP는 영향을 받지 않는다
         send("user6@example.com", VerificationPurpose.SIGNUP, "203.0.113.11")
@@ -189,6 +191,7 @@ class EmailVerificationControllerTest extends IntegrationTestSupport {
 
         send(EMAIL, VerificationPurpose.SIGNUP)
                 .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.code").value("MAIL_SEND_FAILED"))
                 .andExpect(jsonPath("$.status").value(502))
                 .andExpect(jsonPath("$.message").value("메일을 보내지 못했습니다. 잠시 후 다시 시도해주세요."));
 
@@ -232,6 +235,7 @@ class EmailVerificationControllerTest extends IntegrationTestSupport {
 
         verifyCode(EMAIL, VerificationPurpose.SIGNUP, wrong)
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VERIFICATION_CODE_MISMATCH"))
                 .andExpect(jsonPath("$.message").value("인증 코드가 일치하지 않습니다."))
                 .andExpect(jsonPath("$.description").value("남은 시도 횟수: 4"));
         verifyCode(EMAIL, VerificationPurpose.SIGNUP, wrong)
@@ -255,6 +259,7 @@ class EmailVerificationControllerTest extends IntegrationTestSupport {
 
         verifyCode(EMAIL, VerificationPurpose.SIGNUP, code)
                 .andExpect(status().isGone())
+                .andExpect(jsonPath("$.code").value("VERIFICATION_CODE_EXPIRED"))
                 .andExpect(jsonPath("$.message").value("인증 코드가 만료되었습니다. 다시 요청해주세요."))
                 .andExpect(jsonPath("$.description").value("5분 경과 또는 오입력 5회 초과"));
     }

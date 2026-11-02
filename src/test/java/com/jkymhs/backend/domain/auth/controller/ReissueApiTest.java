@@ -115,6 +115,7 @@ class ReissueApiTest extends IntegrationTestSupport {
     void unknownToken() throws Exception {
         reissue("not-a-real-refresh-token")
                 .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_REFRESH_TOKEN"))
                 .andExpect(jsonPath("$.message").value(RELOGIN_MESSAGE));
     }
 

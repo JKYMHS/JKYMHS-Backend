@@ -85,6 +85,7 @@ public class GlobalExceptionHandler {
     private ResponseEntity<ErrorResponse> handleSpringClientError(org.springframework.web.ErrorResponse springError) {
         String detail = springError.getBody().getDetail();
         ErrorResponse body = ErrorResponse.of(
+                ErrorCode.INVALID_INPUT,
                 springError.getStatusCode(),
                 ErrorCode.INVALID_INPUT.getMessage(),
                 detail != null ? detail : "요청 형식이 올바르지 않습니다."
