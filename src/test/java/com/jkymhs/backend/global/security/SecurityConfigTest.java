@@ -29,8 +29,10 @@ import java.util.concurrent.Callable;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -162,6 +164,31 @@ class SecurityConfigTest {
         String body = response.getContentAsString(StandardCharsets.UTF_8);
         assertThat((String) JsonPath.read(body, "$.code")).isEqualTo("FORBIDDEN");
         assertThat((String) JsonPath.read(body, "$.message")).isEqualTo("접근 권한이 없습니다.");
+    }
+
+    @Test
+    @DisplayName("CORS 허용 주소를 설정하지 않으면(기본값) 어떤 Origin의 사전 요청도 허용하지 않는다")
+    void noOriginAllowedByDefault() throws Exception {
+        mockMvc.perform(options("/api/test/me")
+                        .header(HttpHeaders.ORIGIN, "https://app.example.com")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "GET"))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
+    }
+
+    @Test
+    @DisplayName("허용 주소가 비어 있어도 같은 출처의 POST는 막지 않는다 (브라우저는 같은 출처 POST에도 Origin을 붙인다)")
+    void sameOriginPostIsNotCors() throws Exception {
+        // MockMvc 요청의 기본 주소는 http://localhost
+        mockMvc.perform(post("/api/auth/open").header(HttpHeaders.ORIGIN, "http://localhost"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("스킴이 다르면 다른 출처다. 프록시가 HTTPS를 풀어서 넘기는 구성에서 허용 주소가 비어 있으면 같은 도메인이어도 403이 된다")
+    void differentSchemeIsCrossOrigin() throws Exception {
+        mockMvc.perform(post("/api/auth/open").header(HttpHeaders.ORIGIN, "https://localhost"))
+                .andExpect(status().isForbidden());
     }
 
     @RestController
