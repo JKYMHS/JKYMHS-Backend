@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -58,6 +59,16 @@ class EmailVerificationServiceTest extends IntegrationTestSupport {
         // null = 성공
         assertThat(results).filteredOn(Objects::isNull).hasSize(1);
         assertThat(results).filteredOn(ErrorCode.VERIFICATION_CODE_EXPIRED::equals).hasSize(CONCURRENT_REQUESTS - 1);
+    }
+
+    @Test
+    @DisplayName("재전송까지 남은 시간은 초 단위로 올림한다. 아주 조금 남아도 0초가 되지 않는다")
+    void secondsRoundedUp() {
+        assertThat(EmailVerificationService.secondsRoundedUp(Duration.ofNanos(1))).isEqualTo(1);
+        assertThat(EmailVerificationService.secondsRoundedUp(Duration.ofMillis(500))).isEqualTo(1);
+        assertThat(EmailVerificationService.secondsRoundedUp(Duration.ofSeconds(1))).isEqualTo(1);
+        assertThat(EmailVerificationService.secondsRoundedUp(Duration.ofMillis(59_001))).isEqualTo(60);
+        assertThat(EmailVerificationService.secondsRoundedUp(Duration.ofSeconds(60))).isEqualTo(60);
     }
 
     private String sendCode() {

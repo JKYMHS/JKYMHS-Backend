@@ -133,18 +133,27 @@ class EmailVerificationControllerTest extends IntegrationTestSupport {
         assertThat(savedCode(VerificationPurpose.RESET_PASSWORD, EMAIL)).isNotNull();
         // 가입된 이메일과 똑같이 60초 재전송 제한도 걸린다
         send(EMAIL, VerificationPurpose.RESET_PASSWORD)
-                .andExpect(status().isTooManyRequests());
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.code").value("CODE_RESEND_COOLDOWN"));
     }
 
     @Test
-    @DisplayName("60초 안에 같은 이메일·용도로 다시 보내면 429로 응답한다")
+    @DisplayName("60초 안에 같은 이메일·용도로 다시 보내면 429 CODE_RESEND_COOLDOWN이고, description에 남은 시간(초)을 담는다")
     void resendCooldown() throws Exception {
         send(EMAIL, VerificationPurpose.SIGNUP).andExpect(status().isOk());
+        // 테스트가 몇 초 걸려도 값이 흔들리지 않게, 발송 시각을 15초 전으로 바꾸고 범위로 확인한다
+        redisTemplate.opsForHash().put(AuthRedisKeys.emailCode(VerificationPurpose.SIGNUP, EMAIL), "sentAt",
+                LocalDateTime.now().minusSeconds(15).toString());
 
-        send(EMAIL, VerificationPurpose.SIGNUP)
+        String body = send(EMAIL, VerificationPurpose.SIGNUP)
                 .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.code").value("CODE_RESEND_COOLDOWN"))
                 .andExpect(jsonPath("$.message").value("잠시 후 다시 시도해주세요."))
-                .andExpect(jsonPath("$.description").value("60초 재전송 제한"));
+                .andReturn().getResponse().getContentAsString();
+
+        String description = JsonPath.read(body, "$.description");
+        assertThat(description).matches("재전송까지 남은 시간: \\d+초");
+        assertThat(Integer.parseInt(description.replaceAll("\\D", ""))).isBetween(30, 45);
     }
 
     @Test

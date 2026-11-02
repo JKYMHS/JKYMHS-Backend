@@ -138,9 +138,15 @@ public class EmailVerificationService {
             return;
         }
         LocalDateTime resendableAt = LocalDateTime.parse(sentAt.toString()).plus(RESEND_COOLDOWN);
-        if (resendableAt.isAfter(LocalDateTime.now())) {
-            throw new CustomException(ErrorCode.TOO_MANY_REQUESTS, "60초 재전송 제한");
+        Duration remaining = Duration.between(LocalDateTime.now(), resendableAt);
+        if (remaining.isPositive()) {
+            throw new CustomException(ErrorCode.CODE_RESEND_COOLDOWN, "재전송까지 남은 시간: " + secondsRoundedUp(remaining) + "초");
         }
+    }
+
+    // 내림하면 0.5초 남았을 때 "0초"가 돼서, 안내대로 바로 다시 보낸 FE가 또 429를 받는다
+    static long secondsRoundedUp(Duration duration) {
+        return duration.plusNanos(999_999_999).toSeconds();
     }
 
     // Random은 다음 값을 예측할 수 있어서 인증 코드에는 SecureRandom을 쓴다. 앞자리 0도 살려서 항상 6자리로 만든다
