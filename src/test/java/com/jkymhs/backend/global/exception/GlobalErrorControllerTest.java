@@ -11,6 +11,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 
+import java.net.Socket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -63,6 +64,34 @@ class GlobalErrorControllerTest extends IntegrationTestSupport {
         assertThat((String) JsonPath.read(response.body(), "$.code")).isEqualTo("UNAUTHORIZED");
     }
 
+    // 안 는 UTF-8로 EC 95 88이다. 서버는 헤더를 ISO-8859-1로 읽으므로 0x95, 0x88이 제어 문자가 돼서 방화벽이 거절한다
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {"/api/auth/reissue", "/api/auth/login"})
+    @DisplayName("User-Agent에 한글(UTF-8)이 그대로 오면 500이 아니라 400 공통 에러 형식으로 응답한다")
+    void nonLatin1UserAgent(String path) throws Exception {
+        String body = "{\"email\":\"a@example.com\",\"password\":\"abc12345\"}";
+        String response = sendRaw("POST " + path + " HTTP/1.1\r\n"
+                + "Host: localhost\r\n"
+                + "User-Agent: MyApp \u00EC\u0095\u0088\r\n"
+                + "Content-Type: application/json\r\n"
+                + "Content-Length: " + body.length() + "\r\n"
+                + "Connection: close\r\n\r\n"
+                + body);
+
+        assertThat(response).startsWith("HTTP/1.1 400");
+        String json = response.lines().filter(line -> line.startsWith("{")).findFirst().orElseThrow();
+        assertThat((String) JsonPath.read(json, "$.code")).isEqualTo("INVALID_INPUT");
+    }
+
+    @Test
+    @DisplayName("실제 서버에서 /error를 직접 호출하면 404다")
+    void directCallOnRealServer() throws Exception {
+        HttpResponse<String> response = send("/error");
+
+        assertThat(response.statusCode()).isEqualTo(404);
+        assertThat((String) JsonPath.read(response.body(), "$.code")).isEqualTo("RESOURCE_NOT_FOUND");
+    }
+
     @ParameterizedTest(name = "{0} -> {1}")
     @CsvSource({
             "400, INVALID_INPUT",
@@ -70,8 +99,11 @@ class GlobalErrorControllerTest extends IntegrationTestSupport {
             "403, FORBIDDEN",
             "404, RESOURCE_NOT_FOUND",
             "405, METHOD_NOT_ALLOWED",
-            "413, INTERNAL_SERVER_ERROR",
-            "500, INTERNAL_SERVER_ERROR"
+            "413, INVALID_INPUT",
+            "429, INVALID_INPUT",
+            "500, INTERNAL_SERVER_ERROR",
+            "502, INTERNAL_SERVER_ERROR",
+            "503, SERVICE_UNAVAILABLE"
     })
     @DisplayName("/error로 넘어온 상태코드를 유지하고 그에 맞는 code로 응답한다 (sendError로 끝난 경우 포함)")
     void statusToCode(int status, String code) throws Exception {
@@ -86,11 +118,11 @@ class GlobalErrorControllerTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("상태코드 정보 없이 /error를 직접 호출하면 500으로 응답한다")
+    @DisplayName("상태코드 정보 없이 /error를 직접 호출하면 에러가 아니므로 404로 응답한다")
     void directCall() throws Exception {
         mockMvc.perform(get("/error"))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
     }
 
     private HttpResponse<String> send(String path) throws Exception {
@@ -98,6 +130,15 @@ class GlobalErrorControllerTest extends IntegrationTestSupport {
         HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path)).GET().build();
         try (HttpClient client = HttpClient.newHttpClient()) {
             return client.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        }
+    }
+
+    // HttpClient는 잘못된 헤더 값을 보내주지 않아서 소켓에 바이트를 직접 쓴다
+    private String sendRaw(String rawRequest) throws Exception {
+        try (Socket socket = new Socket("localhost", port)) {
+            socket.getOutputStream().write(rawRequest.getBytes(StandardCharsets.ISO_8859_1));
+            socket.getOutputStream().flush();
+            return new String(socket.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
         }
     }
 }

@@ -30,20 +30,22 @@ public class GlobalErrorController implements ErrorController {
                 .body(body);
     }
 
+    // 상태코드가 없으면 에러가 넘어온 게 아니라 누가 /error를 직접 호출한 것이다. 없는 주소처럼 404로 답해서 500 경보가 울리지 않게 한다
     private static HttpStatusCode resolveStatus(HttpServletRequest request) {
         return request.getAttribute(RequestDispatcher.ERROR_STATUS_CODE) instanceof Integer status
                 ? HttpStatusCode.valueOf(status)
-                : ErrorCode.INTERNAL_SERVER_ERROR.getStatus();
+                : ErrorCode.RESOURCE_NOT_FOUND.getStatus();
     }
 
+    // ErrorCode가 따로 없는 4xx는 GlobalExceptionHandler와 똑같이 INVALID_INPUT이다. FE는 code로만 분기하므로 둘이 달라지면 안 된다
     private static ErrorCode toErrorCode(HttpStatusCode status) {
         return switch (status.value()) {
-            case 400 -> ErrorCode.INVALID_INPUT;
             case 401 -> ErrorCode.UNAUTHORIZED;
             case 403 -> ErrorCode.FORBIDDEN;
             case 404 -> ErrorCode.RESOURCE_NOT_FOUND;
             case 405 -> ErrorCode.METHOD_NOT_ALLOWED;
-            default -> ErrorCode.INTERNAL_SERVER_ERROR;
+            case 503 -> ErrorCode.SERVICE_UNAVAILABLE;
+            default -> status.is4xxClientError() ? ErrorCode.INVALID_INPUT : ErrorCode.INTERNAL_SERVER_ERROR;
         };
     }
 }

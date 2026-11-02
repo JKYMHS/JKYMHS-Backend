@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
  * - HttpOnly: 자바스크립트에서 읽을 수 없다. XSS가 있어도 리프레시 토큰은 빼낼 수 없다
  * - Secure: HTTPS 요청에만 붙는다
  * - SameSite: 다른 사이트에서 보낸 요청에 쿠키를 붙일지 정한다 (기본값 Lax는 다른 사이트의 POST에 붙이지 않는다)
- * - Path=/api/auth: 재발급·로그아웃 API에만 붙는다. 다른 API 요청에는 실리지 않는다
+ * - Path=/api/auth: /api/auth/* 요청에만 붙는다. 그중 쿠키를 읽는 API는 재발급·로그아웃뿐이다
  * - Domain 없음: 이 쿠키를 내려준 호스트로만 돌아간다
  */
 @Component

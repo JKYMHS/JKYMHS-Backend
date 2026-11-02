@@ -70,7 +70,7 @@ auth:
     same-site: ${AUTH_COOKIE_SAME_SITE:Lax}
 
 cors:
-  # 브라우저에서 이 API를 호출할 수 있는 FE 주소 (쉼표로 구분, * 불가). 기본값이 비어 있어서 설정하기 전에는 어떤 Origin도 허용하지 않는다
+  # 브라우저에서 이 API를 호출할 수 있는 FE 주소 (쉼표로 구분, 스킴과 호스트만. 경로·끝의 /·* 불가). 기본값이 비어 있어서 설정하기 전에는 어떤 Origin도 허용하지 않는다
   allowed-origins: ${CORS_ALLOWED_ORIGINS:}
 
 ---
