@@ -12,10 +12,8 @@ import java.util.Optional;
 
 public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long> {
 
-    Optional<RefreshToken> findByTokenHash(String tokenHash);
-
     /*
-     * 재발급용 조회. SELECT ... FOR UPDATE로 행을 잠가서 트랜잭션이 끝날 때까지 같은 행을 읽으려는 다른 요청을 기다리게 한다.
+     * 재발급·로그아웃용 조회. SELECT ... FOR UPDATE로 행을 잠가서 트랜잭션이 끝날 때까지 같은 행을 읽으려는 다른 요청을 기다리게 한다.
      * 잠그지 않으면 같은 토큰으로 재발급 요청이 동시에 두 번 왔을 때 둘 다 "아직 폐기 안 됨"을 보고 같은 행을 고친다.
      * 잠그면 두 번째 요청은 첫 번째가 교체한 뒤의 상태(rotatedAt)를 읽어서 TokenService의 유예 시간 규칙을 탄다.
      */
@@ -38,4 +36,16 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
             where r.user.id = :userId and (r.revokedAt is null or r.rotatedAt is not null)
             """)
     int revokeAllByUserId(Long userId, LocalDateTime now);
+
+    /*
+     * 한 로그인(family)의 토큰만 폐기한다 (로그아웃). 다른 기기의 로그인은 그대로 둔다.
+     * rotatedAt을 비우는 이유는 위와 같다. 비우지 않으면 로그아웃한 뒤에도 방금 교체된 토큰이 유예 시간 규칙으로 새 토큰을 받아간다.
+     */
+    @Modifying(clearAutomatically = true)
+    @Query("""
+            update RefreshToken r
+            set r.revokedAt = coalesce(r.revokedAt, :now), r.rotatedAt = null
+            where r.user.id = :userId and r.familyId = :familyId and (r.revokedAt is null or r.rotatedAt is not null)
+            """)
+    int revokeFamily(Long userId, String familyId, LocalDateTime now);
 }

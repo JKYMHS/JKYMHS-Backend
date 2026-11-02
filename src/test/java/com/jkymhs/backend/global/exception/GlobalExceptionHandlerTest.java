@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.RedisSystemException;
 import org.springframework.http.MediaType;
@@ -170,6 +171,15 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    @DisplayName("DB 잠금 충돌(데드락)은 다시 보내면 되는 요청이라 500이 아니라 503으로 응답한다")
+    void lockFailure() throws Exception {
+        mockMvc.perform(get("/test/lock"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"))
+                .andExpect(jsonPath("$.description").value("일시적인 서버 장애"));
+    }
+
+    @Test
     @DisplayName("클라이언트가 JSON을 요청하지 않아도 에러 응답은 JSON으로 내려준다")
     void errorBodyIsJsonRegardlessOfAccept() throws Exception {
         mockMvc.perform(get("/test/redis").accept(MediaType.APPLICATION_XML))
@@ -230,6 +240,11 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/redis-system")
         void redisSystem() {
             throw new RedisSystemException("LOADING Redis is loading the dataset in memory", null);
+        }
+
+        @GetMapping("/lock")
+        void lock() {
+            throw new CannotAcquireLockException("Deadlock found when trying to get lock");
         }
 
         @GetMapping("/unexpected")

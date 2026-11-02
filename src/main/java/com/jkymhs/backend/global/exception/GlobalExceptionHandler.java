@@ -1,6 +1,7 @@
 package com.jkymhs.backend.global.exception;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.RedisSystemException;
@@ -68,6 +69,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({RedisConnectionFailureException.class, QueryTimeoutException.class, RedisSystemException.class})
     public ResponseEntity<ErrorResponse> handleRedisFailure(Exception e) {
         log.error("Redis unavailable: {}", e.getMessage());
+        return toResponse(ErrorResponse.of(ErrorCode.SERVICE_UNAVAILABLE, "일시적인 서버 장애"));
+    }
+
+    // 탈취 처리·로그아웃의 일괄 UPDATE끼리 서로의 행을 기다리면 DB가 한쪽을 취소한다(데드락). 다시 보내면 되는 요청이라 500 대신 503이다
+    @ExceptionHandler(CannotAcquireLockException.class)
+    public ResponseEntity<ErrorResponse> handleLockFailure(CannotAcquireLockException e) {
+        log.warn("DB lock conflict: {}", e.getMessage());
         return toResponse(ErrorResponse.of(ErrorCode.SERVICE_UNAVAILABLE, "일시적인 서버 장애"));
     }
 

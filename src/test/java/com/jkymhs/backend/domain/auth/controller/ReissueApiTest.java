@@ -112,6 +112,32 @@ class ReissueApiTest extends IntegrationTestSupport {
         reissue(deviceB.refreshToken()).andExpect(status().isOk());
     }
 
+    // 8초면 요청이 도착할 때까지 2초 여유가 있어서 테스트가 조금 느려도 흔들리지 않는다
+    @Test
+    @DisplayName("교체된 지 10초가 되기 직전이면 아직 유예 시간이라 200이다")
+    void replayJustInsideGrace() throws Exception {
+        String rotated = tokenService.issue(user, "device").refreshToken();
+        reissue(rotated).andExpect(status().isOk());
+        shiftRotatedAtBack(8);
+
+        reissue(rotated).andExpect(status().isOk());
+
+        assertThat(refreshTokenRepository.findAll()).filteredOn(RefreshToken::isRevoked).hasSize(1);
+    }
+
+    // 정확히 10초 전으로 옮기면 요청이 도착하는 순간에는 항상 10초를 넘겼다. 유예 시간이 11초로 바뀌면 이 테스트가 실패한다
+    @Test
+    @DisplayName("교체된 지 10초가 되면 유예 시간이 끝나서 탈취로 처리한다")
+    void replayJustOutsideGrace() throws Exception {
+        String rotated = tokenService.issue(user, "device").refreshToken();
+        reissue(rotated).andExpect(status().isOk());
+        shiftRotatedAtBack(10);
+
+        reissue(rotated).andExpect(status().isUnauthorized());
+
+        assertThat(refreshTokenRepository.findAll()).hasSize(2).allMatch(RefreshToken::isRevoked);
+    }
+
     @Test
     @DisplayName("교체된 지 10초가 지난 토큰이 다시 오면 탈취로 보고 401, 가장 최근 토큰까지 그 회원의 모든 토큰을 폐기한다")
     void replayAfterGraceRevokesAllSessions() throws Exception {
@@ -162,6 +188,35 @@ class ReissueApiTest extends IntegrationTestSupport {
         reissue(recentlyRotated).andExpect(status().isUnauthorized());
         reissue(newest).andExpect(status().isUnauthorized());
         reissue(newSession.refreshToken()).andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("오래전에 교체되고 이미 만료된 토큰이 다시 오면 401만 주고, 다른 기기는 끊지 않는다")
+    void expiredRotatedTokenDoesNotRevokeOthers() throws Exception {
+        String old = tokenService.issue(user, "old device").refreshToken();
+        String successor = RefreshTokenCookies.tokenOf(reissue(old).andReturn());
+        IssuedTokens other = tokenService.issue(user, "other device");
+        expireRotatedTokens(200);
+
+        reissue(old)
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_REFRESH_TOKEN"));
+
+        assertThat(refreshTokenRepository.findAll()).filteredOn(RefreshToken::isRevoked).hasSize(1);
+        reissue(successor).andExpect(status().isOk());
+        reissue(other.refreshToken()).andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("방금 교체됐어도 이미 만료된 토큰은 유예 시간으로 새 토큰을 받지 못한다")
+    void expiredRotatedTokenCannotUseGrace() throws Exception {
+        String rotated = tokenService.issue(user, "device").refreshToken();
+        reissue(rotated).andExpect(status().isOk());
+        expireRotatedTokens(0);
+
+        reissue(rotated).andExpect(status().isUnauthorized());
+
+        assertThat(refreshTokenRepository.count()).isEqualTo(2);
     }
 
     @Test
@@ -245,9 +300,22 @@ class ReissueApiTest extends IntegrationTestSupport {
         assertThat(refreshTokenRepository.findAll()).noneMatch(RefreshToken::isRevoked);
     }
 
-    // 10초를 기다릴 수 없어서, 지금까지 교체된 토큰의 교체 시각을 11초 전으로 옮긴다
     private void passGracePeriod() {
-        jdbcTemplate.update("UPDATE refresh_tokens SET rotated_at = DATE_SUB(rotated_at, INTERVAL 11 SECOND) WHERE rotated_at IS NOT NULL");
+        shiftRotatedAtBack(11);
+    }
+
+    // 몇 초를 기다릴 수 없어서, 지금까지 교체된 토큰의 교체 시각을 그만큼 앞으로 옮긴다
+    private void shiftRotatedAtBack(int seconds) {
+        jdbcTemplate.update("UPDATE refresh_tokens SET rotated_at = DATE_SUB(rotated_at, INTERVAL ? SECOND) WHERE rotated_at IS NOT NULL", seconds);
+    }
+
+    // 지금까지 교체된 토큰을 만료시킨다. 교체 시각은 주어진 일수만큼 앞으로 옮긴다
+    private void expireRotatedTokens(int rotatedDaysAgo) {
+        jdbcTemplate.update("""
+                UPDATE refresh_tokens
+                SET expires_at = DATE_SUB(NOW(6), INTERVAL 1 DAY), rotated_at = DATE_SUB(rotated_at, INTERVAL ? DAY)
+                WHERE rotated_at IS NOT NULL
+                """, rotatedDaysAgo);
     }
 
     private ResultActions reissue(String refreshToken) throws Exception {
