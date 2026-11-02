@@ -1,7 +1,6 @@
 package com.jkymhs.backend.domain.auth.controller;
 
 import com.jayway.jsonpath.JsonPath;
-import com.jkymhs.backend.domain.auth.entity.RefreshToken;
 import com.jkymhs.backend.domain.auth.entity.VerificationPurpose;
 import com.jkymhs.backend.domain.auth.repository.RefreshTokenRepository;
 import com.jkymhs.backend.domain.auth.service.VerificationTokenService;
@@ -35,7 +34,7 @@ class AuthFlowTest extends IntegrationTestSupport {
     private RefreshTokenRepository refreshTokenRepository;
 
     @Test
-    @DisplayName("가입 → 로그인 → 재발급 → 로그아웃 → 로그아웃한 토큰으로 재발급하면 401")
+    @DisplayName("가입 → 로그인 → 재발급 → 로그아웃 → 로그아웃한 토큰으로 재발급하면 401이고, 가입 때 받은 다른 기기 토큰은 살아 있다")
     void signupLoginReissueLogout() throws Exception {
         String verificationToken = verificationTokenService.issue(VerificationPurpose.SIGNUP, EMAIL);
 
@@ -68,9 +67,9 @@ class AuthFlowTest extends IntegrationTestSupport {
 
         reissue(refreshToken).andExpect(status().isUnauthorized());
 
-        // 로그아웃으로 폐기된 토큰도 "폐기된 토큰의 재사용"이라 탈취로 보고, 가입 때 받은 다른 기기 토큰까지 모두 폐기된다
-        assertThat(refreshTokenRepository.findAll()).allMatch(RefreshToken::isRevoked);
-        reissue(RefreshTokenCookies.tokenOf(signedUp)).andExpect(status().isUnauthorized());
+        // 로그아웃한 토큰이 다시 온 것은 탈취가 아니다. 가입 때 받은 다른 기기 토큰은 폐기되지 않는다
+        assertThat(refreshTokenRepository.findAll()).filteredOn(token -> !token.isRevoked()).hasSize(1);
+        reissue(RefreshTokenCookies.tokenOf(signedUp)).andExpect(status().isOk());
     }
 
     private ResultActions call(String path, String body) throws Exception {

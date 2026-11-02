@@ -18,11 +18,15 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -48,6 +52,9 @@ class ReissueApiTest extends IntegrationTestSupport {
 
     @Autowired
     private JwtProperties jwtProperties;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     private User user;
 
@@ -82,11 +89,36 @@ class ReissueApiTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("이미 바꿔 쓴(폐기된) 토큰이 다시 오면 탈취로 보고 401, 그 회원의 모든 기기 토큰을 폐기한다")
-    void reuseRevokesAllSessions() throws Exception {
+    @DisplayName("교체된 지 10초 안에 같은 토큰이 다시 오면 탈취로 보지 않고 새 토큰을 또 준다. 쓴 토큰은 폐기된 채로 남고 다른 토큰은 그대로다")
+    void replayWithinGrace() throws Exception {
         IssuedTokens deviceA = tokenService.issue(user, "device A");
         IssuedTokens deviceB = tokenService.issue(user, "device B");
         String rotated = RefreshTokenCookies.tokenOf(reissue(deviceA.refreshToken()).andReturn());
+
+        MvcResult replayed = reissue(deviceA.refreshToken())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isNotEmpty())
+                .andExpect(RefreshTokenCookies.issued())
+                .andReturn();
+
+        assertThat(RefreshTokenCookies.tokenOf(replayed)).isNotEqualTo(rotated);
+        // device A, 첫 재발급, 겹친 재발급, device B 중 처음 쓴 device A 토큰만 폐기된 상태다
+        List<RefreshToken> tokens = refreshTokenRepository.findAll();
+        assertThat(tokens).hasSize(4);
+        assertThat(tokens).filteredOn(RefreshToken::isRevoked).singleElement()
+                .extracting(RefreshToken::getUserAgent).isEqualTo("device A");
+        reissue(rotated).andExpect(status().isOk());
+        reissue(RefreshTokenCookies.tokenOf(replayed)).andExpect(status().isOk());
+        reissue(deviceB.refreshToken()).andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("교체된 지 10초가 지난 토큰이 다시 오면 탈취로 보고 401, 가장 최근 토큰까지 그 회원의 모든 토큰을 폐기한다")
+    void replayAfterGraceRevokesAllSessions() throws Exception {
+        IssuedTokens deviceA = tokenService.issue(user, "device A");
+        IssuedTokens deviceB = tokenService.issue(user, "device B");
+        String newest = RefreshTokenCookies.tokenOf(reissue(deviceA.refreshToken()).andReturn());
+        passGracePeriod();
 
         reissue(deviceA.refreshToken())
                 .andExpect(status().isUnauthorized())
@@ -96,8 +128,56 @@ class ReissueApiTest extends IntegrationTestSupport {
 
         // 401을 던졌어도 "모든 토큰 폐기"는 롤백되지 않고 남아 있어야 한다
         assertThat(refreshTokenRepository.findAll()).hasSize(3).allMatch(RefreshToken::isRevoked);
-        reissue(rotated).andExpect(status().isUnauthorized());
+        reissue(newest).andExpect(status().isUnauthorized());
         reissue(deviceB.refreshToken()).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("탈취로 일괄 폐기한 뒤에는 방금 교체된 토큰도 새 세션을 받지 못하고(401), 다시 보내도 이후의 새 로그인을 끊지 못한다")
+    void recentlyRotatedTokenAfterMassRevoke() throws Exception {
+        String stolen = tokenService.issue(user, "device A").refreshToken();
+        String recentlyRotated = RefreshTokenCookies.tokenOf(reissue(stolen).andReturn());
+        passGracePeriod();
+        // stolen은 10초가 지났고, recentlyRotated는 지금 막 교체돼서 아직 유예 시간 안이다
+        String newest = RefreshTokenCookies.tokenOf(reissue(recentlyRotated).andReturn());
+        Map<Long, LocalDateTime> revokedAtBefore = refreshTokenRepository.findAll().stream()
+                .filter(RefreshToken::isRevoked)
+                .collect(Collectors.toMap(RefreshToken::getId, RefreshToken::getRevokedAt));
+
+        reissue(stolen).andExpect(status().isUnauthorized());
+
+        List<RefreshToken> tokens = refreshTokenRepository.findAll();
+        assertThat(tokens).hasSize(3).allMatch(RefreshToken::isRevoked).noneMatch(RefreshToken::isRotated);
+        // 이미 폐기돼 있던 토큰은 원래 폐기 시각을 유지한다
+        assertThat(tokens).filteredOn(token -> revokedAtBefore.containsKey(token.getId()))
+                .hasSize(2)
+                .allSatisfy(token -> assertThat(token.getRevokedAt()).isEqualTo(revokedAtBefore.get(token.getId())));
+
+        reissue(recentlyRotated).andExpect(status().isUnauthorized());
+        assertThat(refreshTokenRepository.count()).isEqualTo(3);
+
+        // 다시 로그인한 뒤에 옛날 토큰을 아무리 보내도 새 세션은 끊기지 않는다
+        IssuedTokens newSession = tokenService.issue(user, "new login");
+        reissue(stolen).andExpect(status().isUnauthorized());
+        reissue(recentlyRotated).andExpect(status().isUnauthorized());
+        reissue(newest).andExpect(status().isUnauthorized());
+        reissue(newSession.refreshToken()).andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("로그아웃으로 폐기된 토큰이 다시 오면 401이지만 탈취로 보지 않아서 다른 기기는 그대로 쓸 수 있다")
+    void replayOfLoggedOutToken() throws Exception {
+        IssuedTokens loggedOut = tokenService.issue(user, "logged out device");
+        IssuedTokens other = tokenService.issue(user, "other device");
+        tokenService.logout(user.getId(), loggedOut.refreshToken());
+
+        reissue(loggedOut.refreshToken())
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_REFRESH_TOKEN"));
+
+        assertThat(refreshTokenRepository.findAll()).filteredOn(RefreshToken::isRevoked).singleElement()
+                .extracting(RefreshToken::getUserAgent).isEqualTo("logged out device");
+        reissue(other.refreshToken()).andExpect(status().isOk());
     }
 
     @Test
@@ -163,6 +243,11 @@ class ReissueApiTest extends IntegrationTestSupport {
                 .andExpect(status().isUnauthorized());
 
         assertThat(refreshTokenRepository.findAll()).noneMatch(RefreshToken::isRevoked);
+    }
+
+    // 10초를 기다릴 수 없어서, 지금까지 교체된 토큰의 교체 시각을 11초 전으로 옮긴다
+    private void passGracePeriod() {
+        jdbcTemplate.update("UPDATE refresh_tokens SET rotated_at = DATE_SUB(rotated_at, INTERVAL 11 SECOND) WHERE rotated_at IS NOT NULL");
     }
 
     private ResultActions reissue(String refreshToken) throws Exception {

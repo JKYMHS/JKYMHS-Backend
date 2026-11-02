@@ -16,6 +16,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.HexFormat;
@@ -34,6 +35,12 @@ public class TokenService {
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final int REFRESH_TOKEN_BYTES = 32;
+    /*
+     * 교체된 토큰이 이 시간 안에 다시 오면 탈취가 아니라 정상 요청의 겹침으로 본다.
+     * FE는 액세스 토큰을 메모리에만 두므로 새로고침할 때마다 재발급을 부른다. 탭 두 개가 같이 복원되거나 응답을 받기 전에 새로고침하면
+     * 브라우저가 아직 바뀌지 않은 쿠키를 한 번 더 보낸다. 이것까지 탈취로 보면 평범한 사용자의 모든 기기가 로그아웃된다.
+     */
+    static final Duration REUSE_GRACE = Duration.ofSeconds(10);
 
     private final JwtProvider jwtProvider;
     private final JwtProperties jwtProperties;
@@ -54,8 +61,12 @@ public class TokenService {
      * 리프레시 토큰으로 새 액세스 토큰 + 새 리프레시 토큰을 발급하고, 받은 토큰은 바로 폐기한다 (rotation).
      * 새 리프레시 토큰의 유효기간은 지금부터 다시 jwt.refresh-token-expiration(14일)이다.
      *
-     * 이미 폐기된 토큰이 다시 오면 탈취로 본다. 토큰을 훔친 사람과 진짜 사용자 중 누가 먼저 썼는지 알 수 없으니
-     * 그 회원의 모든 기기를 로그아웃시켜서 둘 다 다시 로그인하게 한다.
+     * 이미 폐기된 토큰이 다시 오면 폐기된 이유와 시점에 따라 다르게 처리한다.
+     * - 교체된 지 {@link #REUSE_GRACE} 안: 정상 요청의 겹침으로 보고 새 토큰을 또 발급한다 (받은 토큰은 폐기된 채로 둔다)
+     * - 교체된 지 그보다 오래됨: 탈취로 본다. 토큰을 훔친 사람과 진짜 사용자 중 누가 먼저 썼는지 알 수 없으니
+     *   그 회원의 모든 기기를 로그아웃시켜서 둘 다 다시 로그인하게 한다
+     * - 교체된 적 없음(로그아웃, 이미 일괄 폐기): 그냥 401이다. 로그아웃한 토큰이 다시 왔다고 다른 기기까지 끊을 이유가 없고,
+     *   옛날 토큰을 가진 공격자가 반복해서 일괄 폐기를 일으키지 못하게 한다
      *
      * noRollbackFor: 기본 설정에서는 메서드가 런타임 예외(CustomException)를 던지면 트랜잭션이 롤백된다.
      * 그러면 401을 던지기 직전에 한 "모든 토큰 폐기"까지 취소돼서 탈취 대응이 사라진다.
@@ -72,14 +83,19 @@ public class TokenService {
                 .orElseThrow(TokenService::invalidRefreshToken);
 
         if (token.isRevoked()) {
-            refreshTokenRepository.revokeAllActiveByUserId(token.getUser().getId(), now);
+            if (token.isRotatedWithin(REUSE_GRACE, now)) {
+                return issue(token.getUser(), userAgent);
+            }
+            if (token.isRotated()) {
+                refreshTokenRepository.revokeAllByUserId(token.getUser().getId(), now);
+            }
             throw invalidRefreshToken();
         }
         if (token.isExpired(now)) {
             throw invalidRefreshToken();
         }
 
-        token.revoke(now);
+        token.rotate(now);
         return issue(token.getUser(), userAgent);
     }
 
