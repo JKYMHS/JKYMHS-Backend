@@ -7,6 +7,9 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.web.servlet.HandlerExceptionResolver;
+import org.springframework.web.servlet.ModelAndView;
+
+import java.io.IOException;
 
 /**
  * 로그인은 했지만 권한이 없는 API에 접근했을 때 403을 공통 에러 형식으로 내려준다.
@@ -21,7 +24,12 @@ public class JwtAccessDeniedHandler implements AccessDeniedHandler {
     }
 
     @Override
-    public void handle(HttpServletRequest request, HttpServletResponse response, AccessDeniedException accessDeniedException) {
-        handlerExceptionResolver.resolveException(request, response, null, new CustomException(ErrorCode.FORBIDDEN));
+    public void handle(HttpServletRequest request, HttpServletResponse response, AccessDeniedException accessDeniedException)
+            throws IOException {
+        ModelAndView handled = handlerExceptionResolver.resolveException(request, response, null,
+                new CustomException(ErrorCode.FORBIDDEN));
+        if (handled == null && !response.isCommitted()) {
+            response.sendError(HttpServletResponse.SC_FORBIDDEN);
+        }
     }
 }

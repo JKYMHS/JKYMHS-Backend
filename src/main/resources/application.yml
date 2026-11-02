@@ -2,11 +2,6 @@ spring:
   application:
     name: backend
 
-  config:
-    # 프로젝트 루트의 .env 파일(KEY=VALUE 형식)을 설정으로 읽는다. 파일이 없으면 무시한다 (optional)
-    # 비밀값(JWT_SECRET 등)은 .env나 서버 환경변수로만 넣고, 이 파일에는 쓰지 않는다
-    import: optional:file:.env[.properties]
-
   autoconfigure:
     # 스프링 시큐리티가 기본으로 만드는 임시 계정(user / 랜덤 비밀번호)을 쓰지 않는다. 인증은 JWT로만 한다
     exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
@@ -39,3 +34,13 @@ jwt:
   secret: ${JWT_SECRET}
   access-token-expiration: 30m
   refresh-token-expiration: 14d
+
+---
+# 프로젝트 루트의 .env 파일(KEY=VALUE 형식)을 설정으로 읽는다. 파일이 없으면 무시한다 (optional)
+# 비밀값(JWT_SECRET 등)은 .env나 서버 환경변수로만 넣고, 이 파일에는 쓰지 않는다
+# test 프로필에서는 읽지 않는다. 개발자마다 다른 .env(실제 SMTP 계정 등)가 테스트 결과를 바꾸면 안 되기 때문이다
+spring:
+  config:
+    activate:
+      on-profile: "!test"
+    import: optional:file:.env[.properties]

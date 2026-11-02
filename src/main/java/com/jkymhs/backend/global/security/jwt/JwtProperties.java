@@ -2,7 +2,6 @@ package com.jkymhs.backend.global.security.jwt;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
@@ -15,7 +14,8 @@ import java.time.Duration;
 @Validated
 @ConfigurationProperties(prefix = "jwt")
 public record JwtProperties(
-        @NotBlank @Size(min = 32, message = "JWT secret은 32자 이상이어야 합니다.") String secret,
+        // 32바이트 이상인지는 JwtProvider에서 검사한다 (@Size로 검사하면 실패 로그에 secret 값이 찍힌다)
+        @NotBlank String secret,
         @NotNull Duration accessTokenExpiration,
         @NotNull Duration refreshTokenExpiration
 ) {

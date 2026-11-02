@@ -52,6 +52,25 @@ class JwtProviderTest {
                 .isInstanceOf(JwtException.class);
     }
 
+    @Test
+    @DisplayName("키 길이와 상관없이 항상 HS256으로 서명한다 (64바이트 키도 HS512가 되지 않는다)")
+    void alwaysHs256() {
+        JwtProvider longKeyProvider = new JwtProvider(new JwtProperties(
+                "a".repeat(64), Duration.ofMinutes(30), Duration.ofDays(14)));
+        String token = longKeyProvider.createAccessToken(1L);
+
+        String header = new String(java.util.Base64.getUrlDecoder().decode(token.split("\\.")[0]));
+        assertThat(header).contains("\"alg\":\"HS256\"");
+    }
+
+    @Test
+    @DisplayName("secret이 32바이트보다 짧으면 만들 때 실패하고, 메시지에 secret 값이 들어가지 않는다")
+    void shortSecret() {
+        assertThatThrownBy(() -> new JwtProvider(new JwtProperties("short-secret-value", Duration.ofMinutes(30), Duration.ofDays(14))))
+                .isInstanceOf(IllegalStateException.class)
+                .message().doesNotContain("short-secret-value");
+    }
+
     private static JwtProvider providerWithExpiration(Duration accessTokenExpiration) {
         return new JwtProvider(new JwtProperties(SECRET, accessTokenExpiration, Duration.ofDays(14)));
     }

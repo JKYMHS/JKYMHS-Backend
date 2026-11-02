@@ -13,6 +13,8 @@ import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Getter
 @Entity
@@ -27,7 +29,13 @@ public class User extends BaseTimeEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
+    /*
+     * utf8mb4_bin: 대소문자·악센트까지 정확히 같아야 같은 이메일로 본다.
+     * MySQL 기본 collation(utf8mb4_0900_ai_ci)은 "User@x.com", "usér@x.com"을 "user@x.com"과 같은 값으로 찾는데,
+     * Redis 키(login:fail:{email})는 문자열이 다르면 다른 키다. 둘의 기준이 다르면 이메일 철자를 바꿔가며 로그인 잠금을 피할 수 있다.
+     * 그래서 요청에서 이메일을 소문자로 맞추고(DTO), DB는 정확히 비교한다.
+     */
+    @Column(nullable = false, columnDefinition = "varchar(255) collate utf8mb4_bin")
     private String email;
 
     // 구글로만 가입한 회원은 비밀번호가 없다 (null)
@@ -38,7 +46,9 @@ public class User extends BaseTimeEntity {
 
     private String googleEmail;
 
+    // Hibernate는 MySQL에서 enum 필드를 ENUM('DONE',...) 컬럼으로 만든다. 값을 추가하면 기존 DB에 저장이 안 돼서 VARCHAR로 고정한다
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(nullable = false, length = 20)
     private OnboardingStatus onboardingStatus;
 

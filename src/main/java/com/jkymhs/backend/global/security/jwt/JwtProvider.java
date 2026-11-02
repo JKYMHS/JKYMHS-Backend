@@ -14,7 +14,7 @@ import java.time.Duration;
 import java.util.Date;
 
 /**
- * 액세스 토큰(JWT) 발급·검증.
+ * 액세스 토큰(JWT, HS256) 발급·검증.
  * 토큰에는 회원 ID(sub)만 넣는다. 이메일 같은 개인정보는 넣지 않는다 (JWT 본문은 암호화가 아니라 Base64라서 누구나 읽을 수 있다).
  */
 @Component
@@ -23,9 +23,15 @@ public class JwtProvider {
     private final SecretKey key;
     private final Duration accessTokenExpiration;
 
+    private static final int MIN_SECRET_BYTES = 32;
+
     public JwtProvider(JwtProperties properties) {
-        // HMAC-SHA 키. 32바이트 이상이면 HS256으로 서명된다
-        this.key = Keys.hmacShaKeyFor(properties.secret().getBytes(StandardCharsets.UTF_8));
+        byte[] secret = properties.secret().getBytes(StandardCharsets.UTF_8);
+        // 길이 검사를 @Size로 하면 스프링이 시작 실패 로그에 secret 값을 그대로 찍는다. 값을 빼고 직접 검사한다
+        if (secret.length < MIN_SECRET_BYTES) {
+            throw new IllegalStateException("jwt.secret은 " + MIN_SECRET_BYTES + "바이트 이상이어야 합니다.");
+        }
+        this.key = Keys.hmacShaKeyFor(secret);
         this.accessTokenExpiration = properties.accessTokenExpiration();
     }
 
@@ -35,7 +41,8 @@ public class JwtProvider {
                 .subject(String.valueOf(userId))
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + accessTokenExpiration.toMillis()))
-                .signWith(key)
+                // 알고리즘을 적지 않으면 jjwt가 키 길이로 고른다 (48바이트 이상이면 HS384, 64바이트 이상이면 HS512). HS256으로 고정한다
+                .signWith(key, Jwts.SIG.HS256)
                 .compact();
     }
 
@@ -48,6 +55,8 @@ public class JwtProvider {
     public Long parseUserId(String token) {
         Claims claims = Jwts.parser()
                 .verifyWith(key)
+                // 우리가 발급하는 HS256 토큰만 받는다
+                .sig().clear().add(Jwts.SIG.HS256).and()
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();

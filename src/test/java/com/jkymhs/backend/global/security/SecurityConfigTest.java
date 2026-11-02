@@ -16,10 +16,13 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Duration;
+import java.util.concurrent.Callable;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -47,6 +50,20 @@ class SecurityConfigTest {
         String token = jwtProvider.createAccessToken(7L);
 
         mockMvc.perform(get("/api/test/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(content().string("7"));
+    }
+
+    @Test
+    @DisplayName("비동기로 응답하는 API(Callable 등)도 두 번째 디스패치에서 인증이 유지된다")
+    void asyncDispatchKeepsAuthentication() throws Exception {
+        String token = jwtProvider.createAccessToken(7L);
+
+        var started = mockMvc.perform(get("/api/test/async").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        mockMvc.perform(asyncDispatch(started))
                 .andExpect(status().isOk())
                 .andExpect(content().string("7"));
     }
@@ -120,6 +137,11 @@ class SecurityConfigTest {
         @GetMapping("/api/test/me")
         Long me(@AuthenticationPrincipal Long userId) {
             return userId;
+        }
+
+        @GetMapping("/api/test/async")
+        Callable<Long> async(@AuthenticationPrincipal Long userId) {
+            return () -> userId;
         }
 
         @PostMapping("/api/auth/open")

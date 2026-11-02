@@ -11,6 +11,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.redis.RedisConnectionFailureException;
+import org.springframework.data.redis.RedisSystemException;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -149,6 +150,14 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    @DisplayName("Redis 명령 도중 오류(RedisSystemException)도 500이 아니라 503으로 응답한다")
+    void redisSystemFailure() throws Exception {
+        mockMvc.perform(get("/test/redis-system"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.status").value(503));
+    }
+
+    @Test
     @DisplayName("클라이언트가 JSON을 요청하지 않아도 에러 응답은 JSON으로 내려준다")
     void errorBodyIsJsonRegardlessOfAccept() throws Exception {
         mockMvc.perform(get("/test/redis").accept(MediaType.APPLICATION_XML))
@@ -202,6 +211,11 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/redis")
         void redis() {
             throw new RedisConnectionFailureException("Unable to connect to Redis");
+        }
+
+        @GetMapping("/redis-system")
+        void redisSystem() {
+            throw new RedisSystemException("LOADING Redis is loading the dataset in memory", null);
         }
 
         @GetMapping("/unexpected")

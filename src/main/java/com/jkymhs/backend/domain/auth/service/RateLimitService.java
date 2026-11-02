@@ -35,7 +35,11 @@ public class RateLimitService {
     public void check(RateLimitType type, String ip) {
         String key = AuthRedisKeys.rateLimit(type, ip);
         Long count = redisTemplate.execute(INCREMENT_SCRIPT, List.of(key), String.valueOf(type.getWindow().toMillis()));
-        if (count != null && count > type.getLimit()) {
+        if (count == null) {
+            // 정상이라면 일어나지 않는다. 횟수를 못 셌으면 통과시키지 않는다 (보안 기능은 실패하면 막는 쪽으로)
+            throw new CustomException(ErrorCode.SERVICE_UNAVAILABLE, "일시적인 서버 장애");
+        }
+        if (count > type.getLimit()) {
             throw new CustomException(ErrorCode.TOO_MANY_REQUESTS, "IP 요청 제한 초과");
         }
     }

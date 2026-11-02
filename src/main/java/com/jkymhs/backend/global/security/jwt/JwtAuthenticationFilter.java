@@ -10,7 +10,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.AuthorityUtils;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
+import org.springframework.security.web.context.RequestAttributeSecurityContextRepository;
+import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
@@ -33,24 +37,34 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtProvider jwtProvider;
+    private final SecurityContextHolderStrategy securityContextHolderStrategy = SecurityContextHolder.getContextHolderStrategy();
+    /*
+     * 세션을 안 쓰는(STATELESS) 설정에서 스프링 시큐리티는 인증 정보를 요청 속성(request attribute)에서 다시 읽는다.
+     * 비동기 응답(Callable, SseEmitter 등)은 요청이 한 번 더 디스패치되는데, 이 필터는 OncePerRequestFilter라 두 번째에는 돌지 않는다.
+     * 그래서 여기에 저장해 두지 않으면 두 번째 디스패치에서 로그인 안 한 사용자로 보여 401이 나간다.
+     */
+    private final SecurityContextRepository securityContextRepository = new RequestAttributeSecurityContextRepository();
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         String token = resolveToken(request);
         if (token != null) {
-            authenticate(token, request);
+            authenticate(token, request, response);
         }
         filterChain.doFilter(request, response);
     }
 
-    private void authenticate(String token, HttpServletRequest request) {
+    private void authenticate(String token, HttpServletRequest request, HttpServletResponse response) {
         try {
             Long userId = jwtProvider.parseUserId(token);
             // principal에 회원 ID를 넣는다. 컨트롤러에서 @AuthenticationPrincipal Long userId로 꺼내 쓴다
             var authentication = new UsernamePasswordAuthenticationToken(
                     userId, null, AuthorityUtils.createAuthorityList("ROLE_USER"));
-            SecurityContextHolder.getContext().setAuthentication(authentication);
+            SecurityContext context = securityContextHolderStrategy.createEmptyContext();
+            context.setAuthentication(authentication);
+            securityContextHolderStrategy.setContext(context);
+            securityContextRepository.saveContext(context, request, response);
         } catch (ExpiredJwtException e) {
             request.setAttribute(ERROR_ATTRIBUTE, EXPIRED_TOKEN);
         } catch (JwtException | IllegalArgumentException e) {

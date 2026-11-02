@@ -1,17 +1,17 @@
 package com.jkymhs.backend.support;
 
-import com.jkymhs.backend.TestcontainersConfiguration;
 import org.junit.jupiter.api.AfterEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.context.annotation.Import;
 import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.sql.ResultSet;
@@ -29,8 +29,12 @@ import java.util.List;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@Import(TestcontainersConfiguration.class)
 public abstract class IntegrationTestSupport {
+
+    @DynamicPropertySource
+    static void containerProperties(DynamicPropertyRegistry registry) {
+        TestContainers.registerProperties(registry);
+    }
 
     @Autowired
     protected MockMvc mockMvc;
@@ -62,11 +66,17 @@ public abstract class IntegrationTestSupport {
                         tables.add(rs.getString(1));
                     }
                 }
+                // 끝나지 않은 트랜잭션이 테이블을 잡고 있으면 TRUNCATE가 기본 1년(!)까지 기다린다. 5초 안에 실패하게 한다
+                statement.execute("SET SESSION lock_wait_timeout = 5");
                 statement.execute("SET FOREIGN_KEY_CHECKS = 0");
-                for (String table : tables) {
-                    statement.execute("TRUNCATE TABLE `" + table + "`");
+                try {
+                    for (String table : tables) {
+                        statement.execute("TRUNCATE TABLE `" + table + "`");
+                    }
+                } finally {
+                    // 이 연결은 커넥션 풀로 돌아가서 다른 테스트가 다시 쓴다. 실패해도 FK 검사를 꼭 다시 켠다
+                    statement.execute("SET FOREIGN_KEY_CHECKS = 1");
                 }
-                statement.execute("SET FOREIGN_KEY_CHECKS = 1");
             }
             return null;
         });
