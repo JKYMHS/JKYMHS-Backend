@@ -35,6 +35,15 @@ jwt:
   access-token-expiration: 30m
   refresh-token-expiration: 14d
 
+google:
+  # Google Cloud Console > OAuth 클라이언트 ID(웹 애플리케이션)의 값. 비밀값이라 환경변수로만 넣는다
+  # 기본값을 비워둬서 구글 설정 없이도 서버는 뜬다 (구글 로그인만 실패한다)
+  client-id: ${GOOGLE_CLIENT_ID:}
+  client-secret: ${GOOGLE_CLIENT_SECRET:}
+  # 인가 코드 → 액세스 토큰 교환, 액세스 토큰 → 사용자 정보(sub, email) 조회
+  token-uri: https://oauth2.googleapis.com/token
+  user-info-uri: https://openidconnect.googleapis.com/v1/userinfo
+
 ---
 # 프로젝트 루트의 .env 파일(KEY=VALUE 형식)을 설정으로 읽는다. 파일이 없으면 무시한다 (optional)
 # 비밀값(JWT_SECRET 등)은 .env나 서버 환경변수로만 넣고, 이 파일에는 쓰지 않는다
