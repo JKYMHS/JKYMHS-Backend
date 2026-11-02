@@ -3,6 +3,7 @@ package com.jkymhs.backend.global.exception;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.data.redis.RedisConnectionFailureException;
+import org.springframework.data.redis.RedisSystemException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -63,7 +64,8 @@ public class GlobalExceptionHandler {
         return toResponse(body, e.getHeaders());
     }
 
-    @ExceptionHandler({RedisConnectionFailureException.class, QueryTimeoutException.class})
+    // 연결 실패·응답 없음 외에, 명령 도중 연결이 끊기거나 Redis가 아직 시작 중일 때(RedisSystemException)도 503
+    @ExceptionHandler({RedisConnectionFailureException.class, QueryTimeoutException.class, RedisSystemException.class})
     public ResponseEntity<ErrorResponse> handleRedisFailure(Exception e) {
         log.error("Redis unavailable: {}", e.getMessage());
         return toResponse(ErrorResponse.of(ErrorCode.SERVICE_UNAVAILABLE, "일시적인 서버 장애"));
