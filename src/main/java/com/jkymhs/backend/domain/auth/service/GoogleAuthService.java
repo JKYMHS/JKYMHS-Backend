@@ -8,6 +8,7 @@ import com.jkymhs.backend.domain.auth.dto.response.GoogleLinkResponse;
 import com.jkymhs.backend.domain.auth.dto.response.GoogleLoginResponse;
 import com.jkymhs.backend.domain.auth.service.GoogleLinkTokenService.LinkData;
 import com.jkymhs.backend.domain.auth.service.LoginAttemptService.LoginAttempt;
+import com.jkymhs.backend.domain.auth.service.TokenService.IssuedTokens;
 import com.jkymhs.backend.domain.user.entity.User;
 import com.jkymhs.backend.domain.user.service.UserService;
 import com.jkymhs.backend.global.exception.CustomException;
@@ -41,14 +42,15 @@ public class GoogleAuthService {
      * 그래서 구글 호출을 먼저 끝내고, DB 작업은 UserService·TokenService가 각자 트랜잭션으로 처리한다.
      * (가입 직후 토큰 발급만 실패하면 계정은 남지만, 다시 구글 로그인하면 LOGGED_IN으로 들어온다)
      */
-    public GoogleLoginResponse login(GoogleLoginRequest request, String userAgent) {
+    public AuthResult<GoogleLoginResponse> login(GoogleLoginRequest request, String userAgent) {
         GoogleUserInfo google = googleOAuthClient.fetchUserInfo(request.code(), request.redirectUri());
 
         // 1) 이 구글 계정(sub)이 연결된 회원 → 로그인
         Optional<User> linkedUser = userService.findByGoogleSub(google.sub());
         if (linkedUser.isPresent()) {
             User user = linkedUser.get();
-            return GoogleLoginResponse.loggedIn(tokenService.issue(user, userAgent), user.getOnboardingStatus());
+            IssuedTokens tokens = tokenService.issue(user, userAgent);
+            return new AuthResult<>(GoogleLoginResponse.loggedIn(tokens, user.getOnboardingStatus()), tokens.refreshToken());
         }
 
         // 2) 같은 이메일로 가입한 회원 → 비밀번호를 확인한 뒤 연결해야 한다
@@ -59,25 +61,26 @@ public class GoogleAuthService {
 
         // 3) 처음 보는 구글 계정 → 비밀번호 없는 계정으로 가입
         User user = userService.register(User.createWithGoogle(google.email(), google.sub(), google.email()));
-        return GoogleLoginResponse.signedUp(tokenService.issue(user, userAgent), user.getOnboardingStatus());
+        IssuedTokens tokens = tokenService.issue(user, userAgent);
+        return new AuthResult<>(GoogleLoginResponse.signedUp(tokens, user.getOnboardingStatus()), tokens.refreshToken());
     }
 
     /**
      * 같은 이메일이라는 것만으로 자동 연결하지 않고 기존 비밀번호를 한 번 더 확인한다.
      * 비밀번호 확인 없이 연결하면, 이메일만 같은 구글 계정을 가진 사람이 남의 계정에 들어갈 수 있다.
      */
-    private GoogleLoginResponse linkRequired(User user, GoogleUserInfo google) {
+    private AuthResult<GoogleLoginResponse> linkRequired(User user, GoogleUserInfo google) {
         // 비밀번호가 없는 구글 전용 계정은 비밀번호로 본인 확인을 할 수 없고,
         // 이미 다른 구글 계정이 연결된 회원은 연결하는 순간 기존 연결이 덮어써진다. 둘 다 이 흐름으로는 연결하지 않는다
         if (!user.hasPassword() || user.isGoogleLinked()) {
             throw new CustomException(ErrorCode.EMAIL_ALREADY_EXISTS, "같은 이메일 계정에 다른 구글 계정이 연결됨");
         }
         String linkToken = googleLinkTokenService.issue(user.getId(), google.sub(), google.email());
-        return GoogleLoginResponse.linkRequired(linkToken, user.getEmail());
+        return new AuthResult<>(GoogleLoginResponse.linkRequired(linkToken, user.getEmail()), null);
     }
 
     @Transactional
-    public GoogleLinkResponse link(GoogleLinkRequest request, String userAgent) {
+    public AuthResult<GoogleLinkResponse> link(GoogleLinkRequest request, String userAgent) {
         LinkData link = googleLinkTokenService.find(request.linkToken())
                 .orElseThrow(GoogleAuthService::expiredLinkToken);
         User user = getLinkTarget(link.memberId());
@@ -107,7 +110,8 @@ public class GoogleAuthService {
         }
 
         googleLinkTokenService.delete(request.linkToken());
-        return GoogleLinkResponse.of(tokenService.issue(user, userAgent), user.getOnboardingStatus());
+        IssuedTokens tokens = tokenService.issue(user, userAgent);
+        return new AuthResult<>(GoogleLinkResponse.of(tokens, user.getOnboardingStatus()), tokens.refreshToken());
     }
 
     // 연결 대기 중에 회원이 탈퇴해서 없으면 linkToken 만료와 똑같이 401로 응답한다

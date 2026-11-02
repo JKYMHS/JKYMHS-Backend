@@ -7,6 +7,7 @@ import com.jkymhs.backend.domain.auth.service.RateLimitType;
 import com.jkymhs.backend.domain.user.entity.User;
 import com.jkymhs.backend.domain.user.service.UserService;
 import com.jkymhs.backend.support.IntegrationTestSupport;
+import com.jkymhs.backend.support.RefreshTokenCookies;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,7 +42,7 @@ class LoginApiTest extends IntegrationTestSupport {
     private PasswordEncoder passwordEncoder;
 
     @Test
-    @DisplayName("로그인에 성공하면 토큰과 온보딩 상태를 주고, 그동안의 실패 기록을 지운다")
+    @DisplayName("로그인에 성공하면 액세스 토큰·온보딩 상태와 리프레시 토큰 쿠키를 주고, 그동안의 실패 기록을 지운다")
     void login() throws Exception {
         registerUser();
         login(EMAIL, WRONG_PASSWORD).andExpect(status().isUnauthorized());
@@ -50,8 +51,9 @@ class LoginApiTest extends IntegrationTestSupport {
         login(EMAIL, PASSWORD)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accessToken").isNotEmpty())
-                .andExpect(jsonPath("$.refreshToken").isNotEmpty())
-                .andExpect(jsonPath("$.onboardingStatus").value("NOT_STARTED"));
+                .andExpect(jsonPath("$.refreshToken").doesNotExist())
+                .andExpect(jsonPath("$.onboardingStatus").value("NOT_STARTED"))
+                .andExpect(RefreshTokenCookies.issued());
 
         assertThat(redisTemplate.hasKey(AuthRedisKeys.loginFail(EMAIL))).isFalse();
         assertThat(refreshTokenRepository.count()).isEqualTo(1);
@@ -65,6 +67,7 @@ class LoginApiTest extends IntegrationTestSupport {
         login(EMAIL, WRONG_PASSWORD)
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"))
+                .andExpect(RefreshTokenCookies.absent())
                 .andExpect(jsonPath("$.message").value(INVALID_CREDENTIALS_MESSAGE));
 
         assertThat(failCount(EMAIL)).isEqualTo("1");

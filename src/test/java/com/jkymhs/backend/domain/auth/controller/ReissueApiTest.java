@@ -10,11 +10,15 @@ import com.jkymhs.backend.domain.user.service.UserService;
 import com.jkymhs.backend.global.security.jwt.JwtProperties;
 import com.jkymhs.backend.global.security.jwt.JwtProvider;
 import com.jkymhs.backend.support.IntegrationTestSupport;
+import com.jkymhs.backend.support.RefreshTokenCookies;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 
 import java.time.Duration;
@@ -28,6 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class ReissueApiTest extends IntegrationTestSupport {
 
     private static final String RELOGIN_MESSAGE = "다시 로그인해주세요.";
+    private static final String INVALID_DESCRIPTION = "만료·폐기·위조된 리프레시 토큰 또는 쿠키 없음";
 
     @Autowired
     private UserService userService;
@@ -52,20 +57,22 @@ class ReissueApiTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("재발급하면 새 토큰 한 쌍을 주고, 쓴 리프레시 토큰은 폐기한다. 새 리프레시 토큰으로 다시 재발급할 수 있다")
+    @DisplayName("재발급하면 본문에 액세스 토큰, 쿠키에 새 리프레시 토큰을 주고 쓴 토큰은 폐기한다. 새 쿠키로 다시 재발급할 수 있다")
     void reissue() throws Exception {
         IssuedTokens issued = tokenService.issue(user, "device");
 
-        String body = reissue(issued.refreshToken())
+        MvcResult result = reissue(issued.refreshToken())
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accessToken").isNotEmpty())
-                .andExpect(jsonPath("$.refreshToken").isNotEmpty())
+                .andExpect(jsonPath("$.refreshToken").doesNotExist())
                 .andExpect(jsonPath("$.onboardingStatus").doesNotExist())
-                .andReturn().getResponse().getContentAsString();
+                .andExpect(RefreshTokenCookies.issued())
+                .andReturn();
 
-        String newRefreshToken = JsonPath.read(body, "$.refreshToken");
+        String newRefreshToken = RefreshTokenCookies.tokenOf(result);
         assertThat(newRefreshToken).isNotEqualTo(issued.refreshToken());
-        assertThat(jwtProvider.parseUserId(JsonPath.read(body, "$.accessToken"))).isEqualTo(user.getId());
+        assertThat(jwtProvider.parseUserId(JsonPath.read(result.getResponse().getContentAsString(), "$.accessToken")))
+                .isEqualTo(user.getId());
 
         List<RefreshToken> tokens = refreshTokenRepository.findAll();
         assertThat(tokens).hasSize(2);
@@ -79,12 +86,13 @@ class ReissueApiTest extends IntegrationTestSupport {
     void reuseRevokesAllSessions() throws Exception {
         IssuedTokens deviceA = tokenService.issue(user, "device A");
         IssuedTokens deviceB = tokenService.issue(user, "device B");
-        String rotated = JsonPath.read(reissue(deviceA.refreshToken()).andReturn().getResponse().getContentAsString(),
-                "$.refreshToken");
+        String rotated = RefreshTokenCookies.tokenOf(reissue(deviceA.refreshToken()).andReturn());
 
         reissue(deviceA.refreshToken())
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.message").value(RELOGIN_MESSAGE));
+                .andExpect(jsonPath("$.code").value("INVALID_REFRESH_TOKEN"))
+                .andExpect(jsonPath("$.message").value(RELOGIN_MESSAGE))
+                .andExpect(RefreshTokenCookies.absent());
 
         // 401을 던졌어도 "모든 토큰 폐기"는 롤백되지 않고 남아 있어야 한다
         assertThat(refreshTokenRepository.findAll()).hasSize(3).allMatch(RefreshToken::isRevoked);
@@ -104,36 +112,60 @@ class ReissueApiTest extends IntegrationTestSupport {
 
         reissue(expired)
                 .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_REFRESH_TOKEN"))
                 .andExpect(jsonPath("$.message").value(RELOGIN_MESSAGE))
-                .andExpect(jsonPath("$.description").value("만료·폐기·위조된 리프레시 토큰"));
+                .andExpect(jsonPath("$.description").value(INVALID_DESCRIPTION));
 
         reissue(other.refreshToken()).andExpect(status().isOk());
     }
 
-    @Test
+    // %ZZ는 잘못된 URL 인코딩이다. 쿠키 값은 사용자가 마음대로 넣을 수 있으므로 500이 나면 안 된다
+    @ParameterizedTest(name = "[{0}]")
+    @ValueSource(strings = {"not-a-real-refresh-token", "%ZZ"})
     @DisplayName("저장된 적 없는(위조된) 토큰은 401")
-    void unknownToken() throws Exception {
-        reissue("not-a-real-refresh-token")
+    void unknownToken(String forged) throws Exception {
+        reissue(forged)
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("INVALID_REFRESH_TOKEN"))
                 .andExpect(jsonPath("$.message").value(RELOGIN_MESSAGE));
     }
 
     @Test
-    @DisplayName("리프레시 토큰을 보내지 않으면 400")
-    void missingToken() throws Exception {
+    @DisplayName("쿠키 없이 재발급하면 401")
+    void missingCookie() throws Exception {
+        mockMvc.perform(post("/api/auth/reissue"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_REFRESH_TOKEN"))
+                .andExpect(jsonPath("$.description").value(INVALID_DESCRIPTION))
+                .andExpect(RefreshTokenCookies.absent());
+    }
+
+    @ParameterizedTest(name = "[{0}]")
+    @ValueSource(strings = {"", " "})
+    @DisplayName("쿠키 값이 비어 있어도 401")
+    void blankCookie(String blank) throws Exception {
+        reissue(blank)
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_REFRESH_TOKEN"))
+                .andExpect(jsonPath("$.description").value(INVALID_DESCRIPTION));
+    }
+
+    @Test
+    @DisplayName("예전 방식으로 본문에 토큰을 보내도 읽지 않는다. 쿠키가 없으면 401")
+    void bodyIsIgnored() throws Exception {
+        IssuedTokens issued = tokenService.issue(user, "device");
+
         mockMvc.perform(post("/api/auth/reissue")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("리프레시 토큰을 입력해주세요."));
+                        .content("""
+                                {"refreshToken": "%s"}
+                                """.formatted(issued.refreshToken())))
+                .andExpect(status().isUnauthorized());
+
+        assertThat(refreshTokenRepository.findAll()).noneMatch(RefreshToken::isRevoked);
     }
 
     private ResultActions reissue(String refreshToken) throws Exception {
-        return mockMvc.perform(post("/api/auth/reissue")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
-                        {"refreshToken": "%s"}
-                        """.formatted(refreshToken)));
+        return mockMvc.perform(post("/api/auth/reissue").cookie(RefreshTokenCookies.cookie(refreshToken)));
     }
 }

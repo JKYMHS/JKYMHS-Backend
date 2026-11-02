@@ -63,6 +63,12 @@ google:
   token-uri: https://oauth2.googleapis.com/token
   user-info-uri: https://openidconnect.googleapis.com/v1/userinfo
 
+auth:
+  # 리프레시 토큰 쿠키 속성. 배포 도메인 구성에 따라 달라져서 환경변수로 뺐다
+  cookie:
+    secure: ${AUTH_COOKIE_SECURE:true}
+    same-site: ${AUTH_COOKIE_SAME_SITE:Lax}
+
 ---
 # 프로젝트 루트의 .env 파일(KEY=VALUE 형식)을 설정으로 읽는다. 파일이 없으면 무시한다 (optional)
 # 비밀값(JWT_SECRET 등)은 .env나 서버 환경변수로만 넣고, 이 파일에는 쓰지 않는다

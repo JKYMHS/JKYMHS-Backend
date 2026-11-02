@@ -10,6 +10,7 @@ import com.jkymhs.backend.global.security.jwt.JwtProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -63,6 +64,9 @@ public class TokenService {
      */
     @Transactional(noRollbackFor = CustomException.class)
     public IssuedTokens reissue(String refreshToken, String userAgent) {
+        if (!StringUtils.hasText(refreshToken)) {
+            throw invalidRefreshToken();
+        }
         LocalDateTime now = LocalDateTime.now();
         RefreshToken token = refreshTokenRepository.findByTokenHashForUpdate(hash(refreshToken))
                 .orElseThrow(TokenService::invalidRefreshToken);
@@ -81,11 +85,14 @@ public class TokenService {
 
     /**
      * 이 기기의 리프레시 토큰만 폐기한다. 다른 기기의 로그인은 유지된다.
-     * 토큰이 없거나, 다른 회원의 것이거나, 이미 폐기·만료됐으면 아무것도 하지 않는다.
+     * 쿠키가 없거나, DB에 없는 토큰이거나, 다른 회원의 것이거나, 이미 폐기·만료됐으면 아무것도 하지 않는다.
      * 어느 경우든 같은 204를 줘서, 남의 토큰이 살아 있는지 떠보는 데 쓸 수 없게 한다.
      */
     @Transactional
     public void logout(Long userId, String refreshToken) {
+        if (!StringUtils.hasText(refreshToken)) {
+            return;
+        }
         LocalDateTime now = LocalDateTime.now();
         refreshTokenRepository.findByTokenHash(hash(refreshToken))
                 .filter(token -> token.getUser().getId().equals(userId))
@@ -93,9 +100,9 @@ public class TokenService {
                 .ifPresent(token -> token.revoke(now));
     }
 
-    // 없음·만료·폐기 모두 같은 응답이다. FE는 이유와 상관없이 로그인 화면으로 보내면 된다
+    // 쿠키 없음·위조·만료·폐기 모두 같은 응답이다. FE는 이유와 상관없이 로그인 화면으로 보내면 된다
     private static CustomException invalidRefreshToken() {
-        return new CustomException(ErrorCode.INVALID_REFRESH_TOKEN, "만료·폐기·위조된 리프레시 토큰");
+        return new CustomException(ErrorCode.INVALID_REFRESH_TOKEN, "만료·폐기·위조된 리프레시 토큰 또는 쿠키 없음");
     }
 
     private static String generateRefreshToken() {

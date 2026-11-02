@@ -6,7 +6,7 @@ import com.jkymhs.backend.domain.user.entity.OnboardingStatus;
 
 /**
  * 구글 로그인 응답. result에 따라 채워지는 필드가 다르다.
- * - LOGGED_IN / SIGNED_UP: accessToken, refreshToken, onboardingStatus
+ * - LOGGED_IN / SIGNED_UP: accessToken, onboardingStatus (리프레시 토큰은 쿠키로 내려간다)
  * - LINK_REQUIRED: linkToken, email
  *
  * {@code NON_NULL}이라 값이 null인 필드는 JSON에서 아예 빠진다 (LINK_REQUIRED 응답에 "accessToken": null이 나가지 않는다).
@@ -16,7 +16,6 @@ import com.jkymhs.backend.domain.user.entity.OnboardingStatus;
 public record GoogleLoginResponse(
         GoogleLoginResult result,
         String accessToken,
-        String refreshToken,
         OnboardingStatus onboardingStatus,
         String linkToken,
         String email
@@ -31,11 +30,11 @@ public record GoogleLoginResponse(
     }
 
     public static GoogleLoginResponse linkRequired(String linkToken, String email) {
-        return new GoogleLoginResponse(GoogleLoginResult.LINK_REQUIRED, null, null, null, linkToken, email);
+        return new GoogleLoginResponse(GoogleLoginResult.LINK_REQUIRED, null, null, linkToken, email);
     }
 
     private static GoogleLoginResponse withTokens(GoogleLoginResult result, IssuedTokens tokens,
                                                   OnboardingStatus onboardingStatus) {
-        return new GoogleLoginResponse(result, tokens.accessToken(), tokens.refreshToken(), onboardingStatus, null, null);
+        return new GoogleLoginResponse(result, tokens.accessToken(), onboardingStatus, null, null);
     }
 }

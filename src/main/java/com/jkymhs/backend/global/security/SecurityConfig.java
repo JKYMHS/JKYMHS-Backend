@@ -19,7 +19,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.servlet.HandlerExceptionResolver;
 
 @Configuration
-@EnableConfigurationProperties(JwtProperties.class)
+@EnableConfigurationProperties({JwtProperties.class, AuthCookieProperties.class})
 public class SecurityConfig {
 
     @Bean
@@ -29,8 +29,15 @@ public class SecurityConfig {
             @Qualifier("handlerExceptionResolver") HandlerExceptionResolver handlerExceptionResolver
     ) throws Exception {
         http
-                // JWT를 Authorization 헤더로 보내는 API 서버라서 세션·쿠키 기반 기능은 끈다
+                /*
+                 * CSRF는 브라우저가 쿠키를 자동으로 붙이는 점을 노린 공격이다. 리프레시 토큰이 쿠키지만 아래 이유로 CSRF 보호를 꺼도 된다.
+                 * - 일반 API는 쿠키가 아니라 Authorization 헤더로 인증한다. 다른 사이트는 이 헤더를 붙일 수 없다
+                 * - 쿠키는 Path=/api/auth라서 재발급·로그아웃 요청에만 붙는다
+                 * - 기본값 SameSite=Lax라서 다른 사이트에서 보낸 POST에는 쿠키가 붙지 않는다
+                 * 단, SameSite=None으로 배포하면 세 번째 보호가 사라져서 Origin 헤더 검증이 필요하다. 이 코드에는 구현돼 있지 않다.
+                 */
                 .csrf(AbstractHttpConfigurer::disable)
+                // 세션을 쓰지 않는 JWT 서버라서 세션 기반 기능도 끈다
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable)
