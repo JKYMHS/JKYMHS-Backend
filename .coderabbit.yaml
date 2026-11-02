@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit AI 코드 리뷰 설정 (https://docs.coderabbit.ai/reference/configuration)
+language: "ko-KR"
+tone_instructions: "백엔드를 배우는 중인 개발자에게 리뷰합니다. 문제를 지적할 때는 왜 문제인지와 고친 코드 예시를 함께 보여주세요."
+
+reviews:
+  profile: "chill"
+  high_level_summary: true
+  collapse_walkthrough: false
+  poem: false
+  in_progress_fortune: false
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - "develop"
+      - "main"
+  path_instructions:
+    - path: "src/main/java/**/*.java"
+      instructions: |
+        - 패키지 구조: com.jkymhs.backend.domain.<기능>/{controller,service,repository,entity,dto/{request,response},exception}, 공통 코드는 global/{config,entity,exception,security}. global은 domain에 의존하지 않는다.
+        - 다른 도메인의 데이터는 그 도메인의 Service를 통해 접근한다. 다른 도메인의 Repository를 직접 쓰지 않는다.
+        - 엔티티에 @Setter를 쓰지 않고, 의도가 드러나는 메서드로 상태를 바꾼다.
+        - API에서 엔티티를 직접 반환하지 않는다. DTO는 record이고 이름은 ~Request / ~Response로 끝난다.
+        - 에러는 CustomException(ErrorCode)로 던지고, 응답은 {message, status, timestamp, description} 형식을 지킨다. 500 응답에 내부 예외 메시지를 노출하지 않는다.
+        - JWT secret, OAuth client secret, SMTP 비밀번호 같은 비밀값은 코드나 application.yml에 직접 쓰지 않고 환경변수로 받는다.
+        - 인증코드·로그인 제한은 Redis 장애 시 우회하지 않고 503을 준다.
+
+chat:
+  auto_reply: true
