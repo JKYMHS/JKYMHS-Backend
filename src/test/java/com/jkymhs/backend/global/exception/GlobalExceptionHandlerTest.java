@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.RedisSystemException;
 import org.springframework.http.MediaType;
@@ -45,6 +46,7 @@ class GlobalExceptionHandlerTest {
     void customException() throws Exception {
         mockMvc.perform(get("/test/custom"))
                 .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"))
                 .andExpect(jsonPath("$.message").value("잠시 후 다시 시도해주세요."))
                 .andExpect(jsonPath("$.status").value(503))
                 .andExpect(jsonPath("$.timestamp").value(notNullValue()))
@@ -56,6 +58,7 @@ class GlobalExceptionHandlerTest {
     void customExceptionWithDescription() throws Exception {
         mockMvc.perform(get("/test/custom-description"))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
                 .andExpect(jsonPath("$.message").value("입력값이 올바르지 않습니다."))
                 .andExpect(jsonPath("$.description").value("남은 시도 횟수: 3"));
     }
@@ -69,6 +72,7 @@ class GlobalExceptionHandlerTest {
                                 {"email": "abc", "password": "abc12345"}
                                 """))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
                 .andExpect(jsonPath("$.message").value("올바른 이메일 형식이 아닙니다."))
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.description").value("email: 올바른 이메일 형식이 아닙니다."));
@@ -81,6 +85,7 @@ class GlobalExceptionHandlerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":"))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
                 .andExpect(jsonPath("$.message").value("입력값이 올바르지 않습니다."))
                 .andExpect(jsonPath("$.description").value("요청 형식이 올바르지 않습니다."));
     }
@@ -90,6 +95,7 @@ class GlobalExceptionHandlerTest {
     void typeMismatch() throws Exception {
         mockMvc.perform(get("/test/param").param("id", "abc"))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
                 .andExpect(jsonPath("$.status").value(400));
     }
 
@@ -98,6 +104,7 @@ class GlobalExceptionHandlerTest {
     void missingParameter() throws Exception {
         mockMvc.perform(get("/test/param"))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
                 .andExpect(jsonPath("$.status").value(400));
     }
 
@@ -106,6 +113,7 @@ class GlobalExceptionHandlerTest {
     void notFound() throws Exception {
         mockMvc.perform(get("/test/nope"))
                 .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
                 .andExpect(jsonPath("$.message").value("요청한 리소스를 찾을 수 없습니다."))
                 .andExpect(jsonPath("$.status").value(404));
     }
@@ -115,6 +123,7 @@ class GlobalExceptionHandlerTest {
     void methodNotAllowed() throws Exception {
         mockMvc.perform(delete("/test/custom"))
                 .andExpect(status().isMethodNotAllowed())
+                .andExpect(jsonPath("$.code").value("METHOD_NOT_ALLOWED"))
                 .andExpect(header().string("Allow", containsString("GET")))
                 .andExpect(jsonPath("$.status").value(405))
                 .andExpect(jsonPath("$.description").value("DELETE 메서드는 지원하지 않습니다."));
@@ -127,6 +136,7 @@ class GlobalExceptionHandlerTest {
                         .contentType(MediaType.TEXT_PLAIN)
                         .content("hello"))
                 .andExpect(status().isUnsupportedMediaType())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
                 .andExpect(jsonPath("$.message").value("입력값이 올바르지 않습니다."))
                 .andExpect(jsonPath("$.status").value(415));
     }
@@ -136,6 +146,7 @@ class GlobalExceptionHandlerTest {
     void parameterValidationFailure() throws Exception {
         mockMvc.perform(get("/test/positive").param("value", "0"))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
                 .andExpect(jsonPath("$.message").value("입력값이 올바르지 않습니다."))
                 .andExpect(jsonPath("$.status").value(400));
     }
@@ -145,6 +156,7 @@ class GlobalExceptionHandlerTest {
     void redisFailure() throws Exception {
         mockMvc.perform(get("/test/redis"))
                 .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"))
                 .andExpect(jsonPath("$.status").value(503))
                 .andExpect(jsonPath("$.description").value("일시적인 서버 장애"));
     }
@@ -154,7 +166,17 @@ class GlobalExceptionHandlerTest {
     void redisSystemFailure() throws Exception {
         mockMvc.perform(get("/test/redis-system"))
                 .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"))
                 .andExpect(jsonPath("$.status").value(503));
+    }
+
+    @Test
+    @DisplayName("DB 잠금 충돌(데드락)은 다시 보내면 되는 요청이라 500이 아니라 503으로 응답한다")
+    void lockFailure() throws Exception {
+        mockMvc.perform(get("/test/lock"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"))
+                .andExpect(jsonPath("$.description").value("일시적인 서버 장애"));
     }
 
     @Test
@@ -163,6 +185,7 @@ class GlobalExceptionHandlerTest {
         mockMvc.perform(get("/test/redis").accept(MediaType.APPLICATION_XML))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"))
                 .andExpect(jsonPath("$.status").value(503));
     }
 
@@ -171,6 +194,7 @@ class GlobalExceptionHandlerTest {
     void unexpectedException() throws Exception {
         mockMvc.perform(get("/test/unexpected"))
                 .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"))
                 .andExpect(jsonPath("$.message").value("잠시 후 다시 시도해주세요."))
                 .andExpect(jsonPath("$.description").value("서버 내부 오류"))
                 .andExpect(content().string(not(containsString("secret"))));
@@ -216,6 +240,11 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/redis-system")
         void redisSystem() {
             throw new RedisSystemException("LOADING Redis is loading the dataset in memory", null);
+        }
+
+        @GetMapping("/lock")
+        void lock() {
+            throw new CannotAcquireLockException("Deadlock found when trying to get lock");
         }
 
         @GetMapping("/unexpected")

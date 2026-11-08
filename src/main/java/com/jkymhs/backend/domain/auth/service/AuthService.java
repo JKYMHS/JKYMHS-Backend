@@ -5,6 +5,7 @@ import com.jkymhs.backend.domain.auth.dto.request.SignupRequest;
 import com.jkymhs.backend.domain.auth.dto.response.LoginResponse;
 import com.jkymhs.backend.domain.auth.entity.VerificationPurpose;
 import com.jkymhs.backend.domain.auth.service.LoginAttemptService.LoginAttempt;
+import com.jkymhs.backend.domain.auth.service.TokenService.IssuedTokens;
 import com.jkymhs.backend.domain.user.entity.User;
 import com.jkymhs.backend.domain.user.service.UserConsentService;
 import com.jkymhs.backend.domain.user.service.UserService;
@@ -44,7 +45,7 @@ public class AuthService {
      * (verificationToken은 Redis라서 롤백되지 않는다. 확인하는 순간 폐기된다)
      */
     @Transactional
-    public LoginResponse signup(SignupRequest request, String userAgent) {
+    public AuthResult<LoginResponse> signup(SignupRequest request, String userAgent) {
         verificationTokenService.consume(VerificationPurpose.SIGNUP, request.email(), request.verificationToken());
 
         if (userService.existsByEmail(request.email())) {
@@ -53,14 +54,14 @@ public class AuthService {
         User user = register(request.email(), request.password());
         userConsentService.saveInitialConsents(user, request.consents().agreedTypes());
 
-        return LoginResponse.of(tokenService.issue(user, userAgent), user.getOnboardingStatus());
+        return issueTokens(user, userAgent);
     }
 
     /**
      * 순서: IP 제한(429) → 구글 전용 계정 확인(409) → 계정 잠금 확인과 시도 기록(423) → 비밀번호 확인.
      * 잠금 확인을 비밀번호 확인보다 먼저 해야 잠긴 동안에는 비밀번호를 맞혀도 로그인되지 않는다.
      */
-    public LoginResponse login(LoginRequest request, String ip, String userAgent) {
+    public AuthResult<LoginResponse> login(LoginRequest request, String ip, String userAgent) {
         rateLimitService.check(RateLimitType.LOGIN, ip);
         String email = request.email();
 
@@ -80,7 +81,12 @@ public class AuthService {
         }
 
         loginAttemptService.reset(email);
-        return LoginResponse.of(tokenService.issue(user, userAgent), user.getOnboardingStatus());
+        return issueTokens(user, userAgent);
+    }
+
+    private AuthResult<LoginResponse> issueTokens(User user, String userAgent) {
+        IssuedTokens tokens = tokenService.issue(user, userAgent);
+        return new AuthResult<>(LoginResponse.of(tokens, user.getOnboardingStatus()), tokens.refreshToken());
     }
 
     // 위의 existsByEmail 확인과 저장 사이에 같은 이메일 가입이 동시에 들어오면 DB UNIQUE 제약이 막아준다. 그것도 409로 응답한다

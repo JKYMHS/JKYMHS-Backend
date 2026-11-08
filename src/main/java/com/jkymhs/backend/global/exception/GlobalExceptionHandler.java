@@ -1,6 +1,7 @@
 package com.jkymhs.backend.global.exception;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.RedisSystemException;
@@ -8,6 +9,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.web.firewall.RequestRejectedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -44,10 +46,12 @@ public class GlobalExceptionHandler {
         return toResponse(ErrorResponse.of(errorCode, message, description));
     }
 
+    // RequestRejectedException: 시큐리티 방화벽은 헤더를 읽는 순간 값을 검사한다. 컨트롤러가 User-Agent를 읽다가 제어 문자를 만나면 여기로 온다
     @ExceptionHandler({
             HttpMessageNotReadableException.class,
             MissingServletRequestParameterException.class,
-            MethodArgumentTypeMismatchException.class
+            MethodArgumentTypeMismatchException.class,
+            RequestRejectedException.class
     })
     public ResponseEntity<ErrorResponse> handleBadRequest(Exception e) {
         return toResponse(ErrorResponse.of(ErrorCode.INVALID_INPUT, "요청 형식이 올바르지 않습니다."));
@@ -71,6 +75,13 @@ public class GlobalExceptionHandler {
         return toResponse(ErrorResponse.of(ErrorCode.SERVICE_UNAVAILABLE, "일시적인 서버 장애"));
     }
 
+    // 탈취 처리·로그아웃의 일괄 UPDATE끼리 서로의 행을 기다리면 DB가 한쪽을 취소한다(데드락). 다시 보내면 되는 요청이라 500 대신 503이다
+    @ExceptionHandler(CannotAcquireLockException.class)
+    public ResponseEntity<ErrorResponse> handleLockFailure(CannotAcquireLockException e) {
+        log.warn("DB lock conflict: {}", e.getMessage());
+        return toResponse(ErrorResponse.of(ErrorCode.SERVICE_UNAVAILABLE, "일시적인 서버 장애"));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleException(Exception e) {
         if (e instanceof org.springframework.web.ErrorResponse springError
@@ -85,6 +96,7 @@ public class GlobalExceptionHandler {
     private ResponseEntity<ErrorResponse> handleSpringClientError(org.springframework.web.ErrorResponse springError) {
         String detail = springError.getBody().getDetail();
         ErrorResponse body = ErrorResponse.of(
+                ErrorCode.INVALID_INPUT,
                 springError.getStatusCode(),
                 ErrorCode.INVALID_INPUT.getMessage(),
                 detail != null ? detail : "요청 형식이 올바르지 않습니다."

@@ -10,14 +10,17 @@ import com.jkymhs.backend.global.security.jwt.JwtProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.UUID;
 
 /**
  * 액세스 토큰 + 리프레시 토큰 발급, 재발급(rotation), 로그아웃.
@@ -33,19 +36,30 @@ public class TokenService {
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final int REFRESH_TOKEN_BYTES = 32;
+    /*
+     * 교체된 토큰이 이 시간 안에 다시 오면 탈취가 아니라 정상 요청의 겹침으로 본다.
+     * FE는 액세스 토큰을 메모리에만 두므로 새로고침할 때마다 재발급을 부른다. 탭 두 개가 같이 복원되거나 응답을 받기 전에 새로고침하면
+     * 브라우저가 아직 바뀌지 않은 쿠키를 한 번 더 보낸다. 이것까지 탈취로 보면 평범한 사용자의 모든 기기가 로그아웃된다.
+     */
+    static final Duration REUSE_GRACE = Duration.ofSeconds(10);
 
     private final JwtProvider jwtProvider;
     private final JwtProperties jwtProperties;
     private final RefreshTokenRepository refreshTokenRepository;
 
+    // 새 로그인이라서 새 family를 시작한다
     @Transactional
     public IssuedTokens issue(User user, String userAgent) {
+        return issue(user, userAgent, UUID.randomUUID().toString());
+    }
+
+    private IssuedTokens issue(User user, String userAgent, String familyId) {
         String accessToken = jwtProvider.createAccessToken(user.getId());
         String refreshToken = generateRefreshToken();
         LocalDateTime expiresAt = LocalDateTime.now().plus(jwtProperties.refreshTokenExpiration());
 
         // DB에는 원문 대신 해시만 저장한다
-        refreshTokenRepository.save(RefreshToken.issue(user, hash(refreshToken), userAgent, expiresAt));
+        refreshTokenRepository.save(RefreshToken.issue(user, familyId, hash(refreshToken), userAgent, expiresAt));
         return new IssuedTokens(accessToken, refreshToken);
     }
 
@@ -53,8 +67,18 @@ public class TokenService {
      * 리프레시 토큰으로 새 액세스 토큰 + 새 리프레시 토큰을 발급하고, 받은 토큰은 바로 폐기한다 (rotation).
      * 새 리프레시 토큰의 유효기간은 지금부터 다시 jwt.refresh-token-expiration(14일)이다.
      *
-     * 이미 폐기된 토큰이 다시 오면 탈취로 본다. 토큰을 훔친 사람과 진짜 사용자 중 누가 먼저 썼는지 알 수 없으니
-     * 그 회원의 모든 기기를 로그아웃시켜서 둘 다 다시 로그인하게 한다.
+     * 새 토큰은 받은 토큰의 family를 물려받는다. 그래서 나중에 로그아웃이 이 토큰들까지 한 번에 폐기할 수 있다.
+     *
+     * 만료된 토큰은 상태와 상관없이 그냥 401이다. 그래서 만료를 가장 먼저 확인한다.
+     * 폐기 여부를 먼저 보면 몇 달 전에 교체되고 이미 만료된 토큰으로도 일괄 폐기를 일으킬 수 있다.
+     * 폐기된 행은 지우지 않아서 이런 토큰이 계속 남기 때문이다.
+     *
+     * 이미 폐기된 토큰이 다시 오면 폐기된 이유와 시점에 따라 다르게 처리한다.
+     * - 교체된 지 {@link #REUSE_GRACE} 안: 정상 요청의 겹침으로 보고 새 토큰을 또 발급한다 (받은 토큰은 폐기된 채로 둔다)
+     * - 교체된 지 그보다 오래됨: 탈취로 본다. 토큰을 훔친 사람과 진짜 사용자 중 누가 먼저 썼는지 알 수 없으니
+     *   그 회원의 모든 기기를 로그아웃시켜서 둘 다 다시 로그인하게 한다
+     * - 교체된 적 없음(로그아웃, 이미 일괄 폐기): 그냥 401이다. 로그아웃한 토큰이 다시 왔다고 다른 기기까지 끊을 이유가 없고,
+     *   옛날 토큰을 가진 공격자가 반복해서 일괄 폐기를 일으키지 못하게 한다
      *
      * noRollbackFor: 기본 설정에서는 메서드가 런타임 예외(CustomException)를 던지면 트랜잭션이 롤백된다.
      * 그러면 401을 던지기 직전에 한 "모든 토큰 폐기"까지 취소돼서 탈취 대응이 사라진다.
@@ -63,39 +87,54 @@ public class TokenService {
      */
     @Transactional(noRollbackFor = CustomException.class)
     public IssuedTokens reissue(String refreshToken, String userAgent) {
+        if (!StringUtils.hasText(refreshToken)) {
+            throw invalidRefreshToken();
+        }
         LocalDateTime now = LocalDateTime.now();
         RefreshToken token = refreshTokenRepository.findByTokenHashForUpdate(hash(refreshToken))
                 .orElseThrow(TokenService::invalidRefreshToken);
 
-        if (token.isRevoked()) {
-            refreshTokenRepository.revokeAllActiveByUserId(token.getUser().getId(), now);
-            throw invalidRefreshToken();
-        }
         if (token.isExpired(now)) {
             throw invalidRefreshToken();
         }
+        if (token.isRevoked()) {
+            if (token.isRotatedWithin(REUSE_GRACE, now)) {
+                return issue(token.getUser(), userAgent, token.getFamilyId());
+            }
+            if (token.isRotated()) {
+                refreshTokenRepository.revokeAllByUserId(token.getUser().getId(), now);
+            }
+            throw invalidRefreshToken();
+        }
 
-        token.revoke(now);
-        return issue(token.getUser(), userAgent);
+        token.rotate(now);
+        return issue(token.getUser(), userAgent, token.getFamilyId());
     }
 
     /**
-     * 이 기기의 리프레시 토큰만 폐기한다. 다른 기기의 로그인은 유지된다.
-     * 토큰이 없거나, 다른 회원의 것이거나, 이미 폐기·만료됐으면 아무것도 하지 않는다.
+     * 이 기기의 로그인(family)을 통째로 폐기한다. 다른 기기의 로그인은 유지된다.
+     * 받은 토큰이 이미 폐기·만료됐어도 내 토큰이면 family를 폐기한다. 토큰 하나만 폐기하면 이런 일이 생긴다.
+     * - 탭 두 개가 겹친 경우: 방금 교체된 이전 토큰이 유예 시간 규칙으로 새 토큰을 받아가서 로그아웃한 세션이 살아난다
+     * - 로그아웃과 재발급이 겹친 경우: 재발급이 만든 새 토큰이 로그아웃 뒤에도 살아 있다
+     * - 쿠키가 이미 교체된 토큰인 경우: 그 뒤를 이은 토큰(훔친 사람이 쓰고 있을 수 있다)이 그대로 남는다
+     *
+     * 쿠키가 없거나, DB에 없는 토큰이거나, 다른 회원의 것이면 아무것도 하지 않는다.
      * 어느 경우든 같은 204를 줘서, 남의 토큰이 살아 있는지 떠보는 데 쓸 수 없게 한다.
      */
     @Transactional
     public void logout(Long userId, String refreshToken) {
+        if (!StringUtils.hasText(refreshToken)) {
+            return;
+        }
         LocalDateTime now = LocalDateTime.now();
-        refreshTokenRepository.findByTokenHash(hash(refreshToken))
+        refreshTokenRepository.findByTokenHashForUpdate(hash(refreshToken))
                 .filter(token -> token.getUser().getId().equals(userId))
-                .filter(token -> !token.isRevoked() && !token.isExpired(now))
-                .ifPresent(token -> token.revoke(now));
+                .ifPresent(token -> refreshTokenRepository.revokeFamily(userId, token.getFamilyId(), now));
     }
 
-    // 없음·만료·폐기 모두 같은 응답이다. FE는 이유와 상관없이 로그인 화면으로 보내면 된다
+    // 쿠키 없음·위조·만료·폐기 모두 같은 응답이다. FE는 이유와 상관없이 로그인 화면으로 보내면 된다
     private static CustomException invalidRefreshToken() {
-        return new CustomException(ErrorCode.INVALID_REFRESH_TOKEN, "만료·폐기·위조된 리프레시 토큰");
+        return new CustomException(ErrorCode.INVALID_REFRESH_TOKEN, "만료·폐기·위조된 리프레시 토큰 또는 쿠키 없음");
     }
 
     private static String generateRefreshToken() {
