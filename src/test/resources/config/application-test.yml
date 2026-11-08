@@ -1,0 +1,15 @@
+# 테스트 전용 설정 중 인증 외 도메인이 추가하는 값. 스프링 부트는 classpath:/config/application-{profile}.yml을
+# classpath:/application-{profile}.yml보다 나중에(우선순위 높게) 읽는다.
+# 바로 위 폴더의 application-test.yml은 인증 PR(#8)과 똑같이 복사한 파일이라 고치지 않고, 새 테스트 키는 여기에 추가한다.
+
+# 스케줄러를 끈다. 배치 테스트는 배치 빈 메서드를 직접 부른다
+batch:
+  enabled: false
+
+# 비동기 실행기를 호출한 스레드에서 바로 실행하는 실행기로 바꾼다 (테스트가 비동기 작업 완료를 기다리지 않아도 되게)
+async:
+  enabled: false
+
+# TourAPI 재시도 사이 대기를 없앤다 (테스트가 실제로 기다리지 않게)
+tour-api:
+  retry-backoff: 0ms
