@@ -72,7 +72,7 @@ class SignupApiTest extends IntegrationTestSupport {
     private JwtProvider jwtProvider;
 
     @Test
-    @DisplayName("가입하면 201과 액세스 토큰, 리프레시 토큰 쿠키를 주고, 회원·약관 동의 5개·리프레시 토큰을 저장한다")
+    @DisplayName("가입하면 201과 액세스 토큰, 리프레시 토큰 쿠키를 주고, 회원·약관 동의 6개·리프레시 토큰을 저장한다")
     void signup() throws Exception {
         String verificationToken = verificationTokenService.issue(VerificationPurpose.SIGNUP, EMAIL);
 
@@ -92,13 +92,15 @@ class SignupApiTest extends IntegrationTestSupport {
 
         Map<ConsentType, UserConsent> consents = userConsentRepository.findAll().stream()
                 .collect(Collectors.toMap(UserConsent::getConsentType, Function.identity()));
-        assertThat(consents).hasSize(5);
+        assertThat(consents).hasSize(6);
         for (ConsentType type : List.of(ConsentType.AGE_14, ConsentType.TERMS, ConsentType.PRIVACY, ConsentType.BEHAVIOR_DATA)) {
             assertThat(consents.get(type).isAgreed()).isTrue();
             assertThat(consents.get(type).getAgreedAt()).isNotNull();
         }
         assertThat(consents.get(ConsentType.EMAIL_NOTIFICATION).isAgreed()).isFalse();
         assertThat(consents.get(ConsentType.EMAIL_NOTIFICATION).getAgreedAt()).isNull();
+        // 위치 정보 동의는 가입 화면에서 받지 않아서 미동의로 저장된다
+        assertThat(consents.get(ConsentType.LOCATION).isAgreed()).isFalse();
         assertThat(consents.values()).allSatisfy(consent -> assertThat(consent.getUpdatedAt()).isNotNull());
 
         assertThat(refreshTokenRepository.count()).isEqualTo(1);
