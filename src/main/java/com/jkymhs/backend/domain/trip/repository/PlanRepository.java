@@ -24,6 +24,14 @@ public interface PlanRepository extends JpaRepository<Plan, Long> {
 
     long countByTripId(Long tripId);
 
+    // [planId, tripId] (탈퇴 시 엔티티를 불러오지 않고 일정안 → 여행을 찾는다)
+    @Query("select p.id, p.tripId from Plan p where p.tripId in :tripIds")
+    List<Object[]> findIdAndTripIdByTripIdIn(Collection<Long> tripIds);
+
+    @Modifying(flushAutomatically = true)
+    @Query("delete from Plan p where p.id = :id")
+    int deleteByIdInBulk(Long id);
+
     @Query("select count(p) from Plan p where p.tripId in (select t.id from Trip t where t.userId = :userId)")
     long countByUserId(Long userId);
 

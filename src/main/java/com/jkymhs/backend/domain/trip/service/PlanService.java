@@ -171,7 +171,8 @@ public class PlanService {
         }
         visitReviewRepository.deleteAllByPlanIdIn(List.of(planId));
         planItemRepository.deleteAllByPlanIdIn(List.of(planId));
-        planRepository.delete(plan);
+        // 방금 불러온 항목 엔티티들이 이 일정안을 가리키고 있어서 remove 대신 DELETE 문으로 지운다 (TripRepository.deleteByIdInBulk 참고)
+        planRepository.deleteByIdInBulk(plan.getId());
     }
 
     @Transactional

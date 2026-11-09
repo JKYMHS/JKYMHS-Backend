@@ -78,7 +78,16 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
             """)
     List<Trip> findVisitMailCandidates(LocalDate today, LocalDate since);
 
-    List<Trip> findAllByUserId(Long userId);
+    @Query("select t.id from Trip t where t.userId = :userId")
+    List<Long> findIdsByUserId(Long userId);
+
+    /*
+     * 삭제는 엔티티를 불러와 remove하지 않고 DELETE 문으로 한다. 같은 트랜잭션에 이 여행을 가리키는 일정안 엔티티가 남아 있으면
+     * Hibernate가 flush 때 "지운 엔티티를 참조한다"(TransientPropertyValueException)로 실패하기 때문이다.
+     */
+    @Modifying(flushAutomatically = true)
+    @Query("delete from Trip t where t.id = :id")
+    int deleteByIdInBulk(Long id);
 
     @Modifying(flushAutomatically = true)
     @Query("delete from Trip t where t.userId = :userId")

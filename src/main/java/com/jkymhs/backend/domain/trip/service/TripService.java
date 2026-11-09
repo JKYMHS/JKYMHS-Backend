@@ -272,15 +272,16 @@ public class TripService {
     @Transactional
     public void delete(Long userId, Long tripId) {
         Trip trip = tripAccess.ownedTripForUpdate(userId, tripId);
-        List<Long> planIds = planRepository.findAllByTripIdOrderByIdAsc(tripId).stream().map(Plan::getId).toList();
+        List<Long> planIds = planRepository.findIdAndTripIdByTripIdIn(List.of(tripId)).stream()
+                .map(row -> (Long) row[0]).toList();
         if (!planIds.isEmpty()) {
             planService.publishOrphaned(userId, tripId, planItemRepository.findAllByPlanIdInAndCalendarEventIdIsNotNull(planIds));
             visitReviewRepository.deleteAllByPlanIdIn(planIds);
             planItemRepository.deleteAllByPlanIdIn(planIds);
             planRepository.deleteAllByTripIdIn(List.of(tripId));
         }
-        tripRegionRepository.deleteAllByTripIdIn(List.of(tripId));
-        tripRepository.delete(trip);
+        tripRegionRepository.deleteAllByTripIdIn(List.of(trip.getId()));
+        tripRepository.deleteByIdInBulk(trip.getId());
     }
 
     /**

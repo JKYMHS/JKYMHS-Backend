@@ -1,8 +1,5 @@
 package com.jkymhs.backend.domain.trip.service;
 
-import com.jkymhs.backend.domain.trip.entity.Plan;
-import com.jkymhs.backend.domain.trip.entity.PlanItem;
-import com.jkymhs.backend.domain.trip.entity.Trip;
 import com.jkymhs.backend.domain.trip.repository.PlanItemRepository;
 import com.jkymhs.backend.domain.trip.repository.PlanRepository;
 import com.jkymhs.backend.domain.trip.repository.TripRegionRepository;
@@ -35,18 +32,22 @@ public class TripWithdrawListener {
     private final VisitReviewRepository visitReviewRepository;
     private final PlanService planService;
 
+    /*
+     * 엔티티를 불러오지 않고 id만 읽어서 DELETE 문으로 지운다. 여행 엔티티가 영속성 컨텍스트에 남아 있으면
+     * 회원 도메인이 이어서 회원 엔티티를 remove할 때 Hibernate가 "지운 회원을 참조하는 여행"으로 보고 실패한다.
+     */
     @EventListener
     public void onUserWithdrawn(UserWithdrawnEvent event) {
         Long userId = event.userId();
-        List<Long> tripIds = tripRepository.findAllByUserId(userId).stream().map(Trip::getId).toList();
         visitReviewRepository.deleteAllByUserId(userId);
+        List<Long> tripIds = tripRepository.findIdsByUserId(userId);
         if (tripIds.isEmpty()) {
             return;
         }
-        List<Plan> plans = planRepository.findAllByTripIdInOrderByIdAsc(tripIds);
-        List<Long> planIds = plans.stream().map(Plan::getId).toList();
-        if (!planIds.isEmpty()) {
-            Map<Long, Long> tripOfPlan = plans.stream().collect(Collectors.toMap(Plan::getId, Plan::getTripId));
+        Map<Long, Long> tripOfPlan = planRepository.findIdAndTripIdByTripIdIn(tripIds).stream()
+                .collect(Collectors.toMap(row -> (Long) row[0], row -> (Long) row[1]));
+        if (!tripOfPlan.isEmpty()) {
+            List<Long> planIds = List.copyOf(tripOfPlan.keySet());
             planItemRepository.findAllByPlanIdInAndCalendarEventIdIsNotNull(planIds).stream()
                     .collect(Collectors.groupingBy(item -> tripOfPlan.get(item.getPlanId())))
                     .forEach((tripId, items) -> planService.publishOrphaned(userId, tripId, items));
