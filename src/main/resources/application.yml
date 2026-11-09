@@ -100,6 +100,53 @@ batch:
   # 배치가 실패하면 {"text": "..."}를 이 주소로 POST한다 (슬랙·디스코드 웹훅 등). 비어 있으면 ERROR 로그만 남긴다
   alert-webhook-url: ${BATCH_ALERT_WEBHOOK_URL:}
 
+# 경로 계산: 카카오모빌리티 자동차 길찾기 (택시 시간·도로 경로). 키는 카카오 로컬과 같은 REST API 키를 쓴다
+kakao-mobility:
+  base-url: ${KAKAO_MOBILITY_BASE_URL:https://apis-navi.kakaomobility.com}
+  # 비어 있으면 택시 경로를 부르지 않는다 (대중교통만 또는 어림값으로 답한다)
+  rest-api-key: ${KAKAO_REST_API_KEY:}
+  # 사용자가 화면에서 기다리는 요청이라 짧게 둔다. 넘으면 다른 결과나 어림값으로 답한다
+  timeout: 3s
+
+# 경로 계산: ODsay 대중교통 길찾기
+odsay:
+  base-url: ${ODSAY_BASE_URL:https://api.odsay.com/v1/api}
+  # ODsay LAB 서버용 키 (등록한 서버 IP에서만 동작). 비어 있으면 대중교통 경로를 부르지 않는다
+  api-key: ${ODSAY_API_KEY:}
+  timeout: 3s
+
+route:
+  # 같은 구간은 7일 동안 다시 부르지 않는다 (외부 API 호출 수·응답 시간 절약). 교통 상황보다 일정 짜기용 대략값이라 충분하다
+  cache-ttl: 7d
+  # 직선거리가 이 값(m) 이하면 걸어간다. 아이·부모님과 가면 더 짧은 기준을 쓴다
+  walk-threshold-meters: 1000
+  slow-walk-threshold-meters: 500
+  # 대중교통 시간이 택시의 1.5배 이하면 대중교통을 추천한다 (비용이 싸서 조금 느려도 대중교통을 고른다)
+  transit-ratio: 1.5
+  # ODsay·카카오를 동시에 부르는 스레드 풀
+  executor:
+    core-size: 4
+    max-size: 8
+    queue-capacity: 200
+
+trip:
+  # 직접 만드는 여행의 최대 기간(일), 여행 하나의 일정안 수, 일정안 하나의 장소 수
+  max-days: 14
+  max-plans: 10
+  max-items: 30
+
+visit-check:
+  # 매일 10:00(KST)에 끝난 여행의 방문 확인 메일을 보낸다
+  mail-cron: "0 0 10 * * *"
+  # "나중에"를 누르면 이 날 수만큼 뒤에 다시 묻는다
+  dismiss-days: 3
+  # 이 날 수보다 오래전에 끝난 여행은 메일을 보내지 않는다 (처음 배포할 때 지난 여행 메일이 한꺼번에 나가지 않게)
+  mail-lookback-days: 7
+
+app:
+  # 메일 속 링크가 가리킬 FE 주소 (끝에 / 없이)
+  frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:3000}
+
 ---
 # 프로젝트 루트의 .env 파일(KEY=VALUE 형식)을 설정으로 읽는다. 파일이 없으면 무시한다 (optional)
 # 비밀값(JWT_SECRET 등)은 .env나 서버 환경변수로만 넣고, 이 파일에는 쓰지 않는다
