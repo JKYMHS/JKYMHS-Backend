@@ -69,12 +69,15 @@ class ContentLookupApiTest extends IntegrationTestSupport {
     void invalid() throws Exception {
         mockMvc.perform(get("/api/contents/lookup"))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
                 .andExpect(jsonPath("$.message").value("조회할 id를 1개 이상 보내주세요."));
         String ids = LongStream.rangeClosed(1, 51).mapToObj(Long::toString).collect(Collectors.joining(","));
         mockMvc.perform(get("/api/contents/lookup").param("ids", ids))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
                 .andExpect(jsonPath("$.message").value("한 번에 50개까지 조회할 수 있습니다."));
         mockMvc.perform(get("/api/contents/lookup").param("ids", "1,abc"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
     }
 }

@@ -115,14 +115,18 @@ class ContentNearbyApiTest extends IntegrationTestSupport {
     void invalid() throws Exception {
         mockMvc.perform(get("/api/contents/nearby").param("type", "RESTAURANT").param("lat", "91").param("lng", "127"))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
                 .andExpect(jsonPath("$.message").value("좌표 값이 올바르지 않습니다."));
         mockMvc.perform(get("/api/contents/nearby").param("type", "RESTAURANT").param("lng", "127"))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
                 .andExpect(jsonPath("$.message").value("좌표 값이 올바르지 않습니다."));
         mockMvc.perform(get("/api/contents/nearby").param("type", "RESTAURANT").param("lat", "37.5").param("lng", "127")
                         .param("radius", "6000"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
         mockMvc.perform(get("/api/contents/nearby").param("type", "ATTRACTION").param("lat", "37.5").param("lng", "127"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
     }
 }

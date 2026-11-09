@@ -250,9 +250,11 @@ class ContentDetailApiTest extends ClockTestSupport {
 
         mockMvc.perform(get("/api/contents/1"))
                 .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
                 .andExpect(jsonPath("$.message").value("존재하지 않거나 삭제된 장소입니다."));
         mockMvc.perform(get("/api/contents/99999"))
                 .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
                 .andExpect(jsonPath("$.message").value("존재하지 않거나 삭제된 장소입니다."));
         tourApi.verify();
     }
