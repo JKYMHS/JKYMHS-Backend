@@ -24,6 +24,7 @@ import com.jkymhs.backend.domain.user.entity.Pace;
 import com.jkymhs.backend.domain.user.service.EffectivePreference;
 import com.jkymhs.backend.domain.user.service.PreferenceService;
 import com.jkymhs.backend.global.model.Companion;
+import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
@@ -71,7 +72,10 @@ public class RecommendationWorker {
     private final FallbackCourseBuilder fallbackCourseBuilder;
     private final CourseAssembler courseAssembler;
     private final RecommendationResultStore resultStore;
-    private final AiCourseClient aiCourseClient;
+    // final이 아닌 이유: 테스트가 AI 응답을 바꿔 끼운다 (ReflectionTestUtils, RouteService의 외부 클라이언트와 같은 방식).
+    // @NonNull이 붙은 필드는 @RequiredArgsConstructor 생성자에 들어간다
+    @NonNull
+    private AiCourseClient aiCourseClient;
     private final PreferenceService preferenceService;
     private final PreferenceProfileService preferenceProfileService;
     private final RecommendationProperties properties;
