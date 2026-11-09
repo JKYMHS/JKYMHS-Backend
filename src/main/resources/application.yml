@@ -147,6 +147,34 @@ app:
   # 메일 속 링크가 가리킬 FE 주소 (끝에 / 없이)
   frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:3000}
 
+# 구글 캘린더 연동·업로드·자동 동기화
+google-calendar:
+  # 구글 로그인과 같은 OAuth 클라이언트 (Google Cloud Console에서 Calendar API를 켜고, 동의 화면에 캘린더 scope를 추가해야 한다)
+  client-id: ${GOOGLE_CLIENT_ID:}
+  client-secret: ${GOOGLE_CLIENT_SECRET:}
+  token-uri: https://oauth2.googleapis.com/token
+  revoke-uri: https://oauth2.googleapis.com/revoke
+  user-info-uri: https://openidconnect.googleapis.com/v1/userinfo
+  api-base-url: https://www.googleapis.com/calendar/v3
+  # 리프레시 토큰 암호화 키 (AES-256, base64로 32바이트. 생성: openssl rand -base64 32). 비어 있으면 서버는 뜨고 캘린더 연동만 503이다
+  # 키를 바꾸면 이미 저장된 토큰을 읽을 수 없어서 모든 회원이 다시 연동해야 한다
+  token-encryption-key: ${CALENDAR_TOKEN_ENCRYPTION_KEY:}
+  # 작업자가 기다리는 작업을 찾는 간격
+  poll-interval: 2s
+  # 작업 하나에서 한 차례에 처리하는 일정 수 (나머지는 다음 차례로). 한 회원의 큰 작업이 실행기를 오래 붙잡지 않게 한다
+  batch-size: 50
+  # 429·5xx일 때 일정 하나를 다시 시도하는 최대 횟수. n번째 실패 뒤 5초 × 2^(n-1) 기다린다
+  max-attempts: 3
+  backoff-base: 5s
+  # 작업자가 작업을 집은 뒤 이 시간 안에 끝나지 않으면(작업자가 죽음) 다른 작업자가 다시 집는다
+  lease: 5m
+  # 사용자가 기다리는 요청(연동·캘린더 목록)도 쓰는 호출이라 짧게 둔다
+  timeout: 5s
+  executor:
+    core-size: 2
+    max-size: 4
+    queue-capacity: 100
+
 ---
 # 프로젝트 루트의 .env 파일(KEY=VALUE 형식)을 설정으로 읽는다. 파일이 없으면 무시한다 (optional)
 # 비밀값(JWT_SECRET 등)은 .env나 서버 환경변수로만 넣고, 이 파일에는 쓰지 않는다
