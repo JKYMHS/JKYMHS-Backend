@@ -50,3 +50,25 @@ batch:
   enabled: ${BATCH_ENABLED:true}
   # 배치가 실패하면 {"text": "..."}를 이 주소로 POST한다 (슬랙·디스코드 웹훅 등). 비어 있으면 ERROR 로그만 남긴다
   alert-webhook-url: ${BATCH_ALERT_WEBHOOK_URL:}
+
+# 카카오 로컬 API (출발지 검색·현재 위치 → 주소)
+kakao-local:
+  base-url: https://dapi.kakao.com
+  # 카카오 개발자 앱의 REST API 키. 비밀값이라 환경변수로만 넣는다. 비어 있으면 출발지 검색만 502로 실패한다
+  rest-api-key: ${KAKAO_REST_API_KEY:}
+  # 사용자가 화면에서 기다리는 요청이라 짧게 둔다
+  timeout: 3s
+
+# 탐색 화면 규칙
+explore:
+  # 닫기 몇 분 전부터 "곧 마감(soon)"으로 보여줄지
+  closing-soon-minutes: 60
+  # 목록 한 페이지 최대 개수 (size 파라미터 상한)
+  page-size-max: 50
+
+# 상세 화면 캐시
+content-detail:
+  # 소개글·사진을 받은 지 이만큼 지나면 다음 조회 때 TourAPI에서 다시 받는다 (하루 호출 한도를 아끼려고 길게 둔다)
+  refresh-after: 7d
+  # 같은 콘텐츠를 여러 요청이 동시에 다시 받지 않게 거는 락의 유효 시간 (갱신이 멈춰도 이 시간 뒤엔 풀린다)
+  lock-ttl: 10s
