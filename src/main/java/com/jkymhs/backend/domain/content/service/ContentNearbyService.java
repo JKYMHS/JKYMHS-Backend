@@ -89,6 +89,13 @@ public class ContentNearbyService {
         return new ContentNearbyResponse(items, total, radius);
     }
 
+    /**
+     * 기준점 반경 안의 삭제 안 된 콘텐츠 수 (반경을 넓히지 않는다). AI 추천의 식사 칸 "주변 음식점 N곳"에 쓴다.
+     */
+    public int countWithin(ContentType type, double lat, double lng, int radiusMeters) {
+        return contentSearchRepository.countWithin(List.of(type), lat, lng, radiusMeters);
+    }
+
     private Map<Long, ContentSnapshot> snapshotsOf(List<DistanceRow> rows) {
         return contentService.findSnapshots(rows.stream().map(DistanceRow::id).toList());
     }
