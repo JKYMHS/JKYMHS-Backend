@@ -62,6 +62,9 @@ public class SecurityConfig {
                         .requestMatchers("/error").permitAll()
                         // 로그인 없이 보는 고정 목록: 지역·카테고리(탐색 필터), 여행 스타일(온보딩). 조회(GET)만 연다
                         .requestMatchers(HttpMethod.GET, "/api/regions", "/api/categories", "/api/travel-styles").permitAll()
+                        // 탐색(목록·자동완성·상세·주변·비교)은 비로그인도 본다. 토큰이 있으면 필터가 회원 ID를 채워서 찜 여부(liked)가 나간다.
+                        // 출발지 검색(/api/places/**)은 카카오 API 호출량을 지키려고 로그인한 회원만 쓴다 (여기 넣지 않는다)
+                        .requestMatchers(HttpMethod.GET, "/api/contents", "/api/contents/**").permitAll()
                         .anyRequest().authenticated()
                 )
 
