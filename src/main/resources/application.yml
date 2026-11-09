@@ -100,6 +100,49 @@ batch:
   # 배치가 실패하면 {"text": "..."}를 이 주소로 POST한다 (슬랙·디스코드 웹훅 등). 비어 있으면 ERROR 로그만 남긴다
   alert-webhook-url: ${BATCH_ALERT_WEBHOOK_URL:}
 
+# 카카오 로컬 API (출발지 검색·현재 위치 → 주소)
+kakao-local:
+  base-url: https://dapi.kakao.com
+  # 카카오 개발자 앱의 REST API 키. 비밀값이라 환경변수로만 넣는다. 비어 있으면 출발지 검색만 502로 실패한다
+  rest-api-key: ${KAKAO_REST_API_KEY:}
+  # 사용자가 화면에서 기다리는 요청이라 짧게 둔다
+  timeout: 3s
+
+# 탐색 화면 규칙
+explore:
+  # 닫기 몇 분 전부터 "곧 마감(soon)"으로 보여줄지
+  closing-soon-minutes: 60
+  # 목록 한 페이지 최대 개수 (size 파라미터 상한)
+  page-size-max: 50
+
+# 상세 화면 캐시
+content-detail:
+  # 소개글·사진을 받은 지 이만큼 지나면 다음 조회 때 TourAPI에서 다시 받는다 (하루 호출 한도를 아끼려고 길게 둔다)
+  refresh-after: 7d
+  # 같은 콘텐츠를 여러 요청이 동시에 다시 받지 않게 거는 락의 유효 시간 (갱신이 멈춰도 이 시간 뒤엔 풀린다)
+  lock-ttl: 10s
+
+# 인기 점수 배치
+popularity:
+  # 매시 정각(KST)에 최근 조회·찜·일정 담기 수로 인기 점수(0~1000)를 다시 계산한다
+  cron: "0 0 * * * *"
+  # 인기 점수에 넣을 최근 기간
+  window: 30d
+
+# 행동 데이터·취향 프로필
+behavior:
+  # 오래된 행동일수록 덜 반영한다. 이 기간이 지나면 가중치가 절반이 된다
+  half-life: 30d
+  # 프로필을 계산할 때 이 기간보다 오래된 행동은 버린다
+  profile-window: 180d
+  # 동행별 프로필은 신호가 이 개수 이상일 때만 쓰고, 그 전에는 공통 프로필을 쓴다
+  companion-min-signals: 10
+  # 행동 이벤트를 요청 스레드 밖에서 저장하는 전용 스레드 풀
+  executor:
+    core-size: 2
+    max-size: 4
+    queue-capacity: 500
+
 # 경로 계산: 카카오모빌리티 자동차 길찾기 (택시 시간·도로 경로). 키는 카카오 로컬과 같은 REST API 키를 쓴다
 kakao-mobility:
   base-url: ${KAKAO_MOBILITY_BASE_URL:https://apis-navi.kakaomobility.com}
@@ -146,6 +189,44 @@ visit-check:
 app:
   # 메일 속 링크가 가리킬 FE 주소 (끝에 / 없이)
   frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:3000}
+
+# AI 코스 추천
+recommendation:
+  # 하루(KST) 추천 횟수. 다시 추천도 1회로 센다. 실패한 요청은 세지 않는다
+  daily-limit: 10
+  # 결과를 보관하는 기간. 지나면 결과 화면·저장·다시 추천이 404가 된다
+  result-ttl: 24h
+  # 지역·기간이 같은 요청이 같이 쓰는 후보 풀 캐시 기간 (인기 점수 배치가 매시 바뀌므로 1시간)
+  candidate-cache-ttl: 1h
+  # 후보 풀 크기(인기 순)와 회원 점수를 매긴 뒤 AI에 넘기는 후보 수
+  candidate-pool-size: 200
+  candidate-limit: 40
+  # 작업 전체 제한 시간. FE가 30초까지 기다리므로 그 안에 끝나게 넘으면 AI 재요청·외부 경로 호출을 건너뛴다
+  deadline: 25s
+  # 같은 조건으로 이 시간 안에 다시 오면(FE의 5xx 재시도) 새로 만들지 않고 앞 요청을 돌려준다
+  dedupe-window: 10s
+  # 이 시간이 지나도 끝나지 않은 요청은 정리 배치가 실패로 바꾼다 (작업 중 서버 재시작 등)
+  pending-timeout: 10m
+  # 출발지 좌표·주소를 지우기 전까지 보관하는 시간 (현재 위치일 수 있어서)
+  origin-retention: 24h
+  # 정리 배치 주기 (매시 30분)
+  cleanup-cron: "0 30 * * * *"
+  # 추천 작업 스레드 풀. 대기열까지 차면 503
+  executor:
+    core-size: 4
+    max-size: 8
+    queue-capacity: 50
+
+# AI 서버
+ai:
+  # mock = 서버 안에서 코스를 만든다 (AI 서버 계약 확정 전 기본값). http = 아래 주소의 AI 서버를 부른다
+  provider: ${AI_PROVIDER:mock}
+  # provider=http일 때 필수 (끝에 / 없이). 비어 있으면 서버가 뜨지 않는다
+  base-url: ${AI_BASE_URL:}
+  # AI 서버 인증 키 (Authorization: Bearer). 비밀값이라 환경변수로만 넣는다
+  api-key: ${AI_API_KEY:}
+  # 넘으면 기본 추천 코스로 대신한다
+  timeout: 20s
 
 ---
 # 프로젝트 루트의 .env 파일(KEY=VALUE 형식)을 설정으로 읽는다. 파일이 없으면 무시한다 (optional)
