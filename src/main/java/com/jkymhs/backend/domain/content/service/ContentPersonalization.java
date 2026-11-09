@@ -6,9 +6,9 @@ import java.util.Set;
 /**
  * 탐색 응답의 개인화 부분(찜 여부, 조회 기록). 탐색(공개 API)과 찜·행동 데이터(로그인 기능)를 이 인터페이스로 떼어 둔다.
  *
- * 지금은 {@link NoopContentPersonalization}만 있다 (찜 기능이 아직 없어서 liked는 항상 false, 조회 기록은 남기지 않는다).
- * 찜·행동 데이터 작업(D3)이 실제 구현으로 바꾸고, 컨트롤러에 {@code @AuthenticationPrincipal Long userId}를 붙인다.
- * 탐색 코드는 이 인터페이스만 알아서 그때 고칠 곳이 컨트롤러 인자 하나뿐이다.
+ * 구현은 찜 도메인의 {@code ContentPersonalizationImpl}이다 (찜 여부 = wishlists, 조회 기록 = content_views).
+ * 탐색 코드는 이 인터페이스만 알아서 찜·행동 데이터 쪽이 바뀌어도 탐색 서비스를 고치지 않는다
+ * (콘텐츠 도메인 → 찜 도메인 방향의 의존이 생기지 않는다).
  */
 public interface ContentPersonalization {
 
