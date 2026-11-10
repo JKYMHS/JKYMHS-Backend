@@ -132,6 +132,15 @@ public class TokenService {
                 .ifPresent(token -> refreshTokenRepository.revokeFamily(userId, token.getFamilyId(), now));
     }
 
+    /**
+     * 그 회원의 모든 기기 로그인을 끊는다 (리프레시 토큰 전부 삭제). 비밀번호 변경과 탈퇴가 부른다.
+     * 이미 발급된 액세스 토큰은 서명만 확인하므로 남은 유효시간(최대 30분) 동안은 계속 쓸 수 있다.
+     */
+    @Transactional
+    public void revokeAll(Long userId) {
+        refreshTokenRepository.deleteAllByUserId(userId);
+    }
+
     // 쿠키 없음·위조·만료·폐기 모두 같은 응답이다. FE는 이유와 상관없이 로그인 화면으로 보내면 된다
     private static CustomException invalidRefreshToken() {
         return new CustomException(ErrorCode.INVALID_REFRESH_TOKEN, "만료·폐기·위조된 리프레시 토큰 또는 쿠키 없음");

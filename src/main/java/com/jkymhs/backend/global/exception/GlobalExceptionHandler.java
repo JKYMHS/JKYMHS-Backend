@@ -28,7 +28,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(CustomException.class)
     public ResponseEntity<ErrorResponse> handleCustomException(CustomException e) {
-        return toResponse(ErrorResponse.of(e.getErrorCode(), e.getDescription()));
+        return toResponse(ErrorResponse.of(e.getErrorCode(), e.getMessage(), e.getDescription()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -38,9 +38,9 @@ public class GlobalExceptionHandler {
 
         String message = fieldErrors.isEmpty()
                 ? errorCode.getMessage()
-                : fieldErrors.get(0).getDefaultMessage();
+                : messageOf(fieldErrors.get(0), errorCode.getMessage());
         String description = fieldErrors.stream()
-                .map(error -> error.getField() + ": " + error.getDefaultMessage())
+                .map(error -> error.getField() + ": " + messageOf(error, "요청 형식이 올바르지 않습니다."))
                 .collect(Collectors.joining(", "));
 
         return toResponse(ErrorResponse.of(errorCode, message, description));
@@ -102,6 +102,12 @@ public class GlobalExceptionHandler {
                 detail != null ? detail : "요청 형식이 올바르지 않습니다."
         );
         return toResponse(body, springError.getHeaders());
+    }
+
+    // @ModelAttribute 쿼리 파라미터의 타입 변환 실패(예: ?companion=dog, ?size=abc)는 기본 문구가 스프링의 영어 기술 문구라서
+    // @RequestParam 타입 오류(message 입력값이 올바르지 않습니다. / description 요청 형식이 올바르지 않습니다.)와 맞춘다
+    private static String messageOf(FieldError error, String bindingFailureMessage) {
+        return error.isBindingFailure() ? bindingFailureMessage : error.getDefaultMessage();
     }
 
     private ResponseEntity<ErrorResponse> toResponse(ErrorResponse body) {

@@ -39,3 +39,6 @@ out/
 ### Local ###
 .env
 .omc/
+
+### TourAPI 수집 결과 ###
+tools/tourapi/data/
