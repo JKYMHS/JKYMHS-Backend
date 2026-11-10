@@ -8,6 +8,7 @@ import com.jkymhs.backend.domain.auth.service.AuthRedisKeys;
 import com.jkymhs.backend.domain.user.entity.OnboardingStatus;
 import com.jkymhs.backend.domain.user.entity.User;
 import com.jkymhs.backend.domain.user.repository.UserRepository;
+import com.jkymhs.backend.domain.user.service.UserService;
 import com.jkymhs.backend.global.exception.CustomException;
 import com.jkymhs.backend.global.exception.ErrorCode;
 import com.jkymhs.backend.support.IntegrationTestSupport;
@@ -18,10 +19,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.ResultActions;
+
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willAnswer;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -40,6 +46,10 @@ class GoogleAuthControllerTest extends IntegrationTestSupport {
 
     @MockitoBean
     private GoogleOAuthClient googleOAuthClient;
+
+    // 평소에는 진짜 UserService 그대로 동작한다. 동시 가입 테스트에서만 조회 직후에 끼어든다
+    @MockitoSpyBean
+    private UserService userService;
 
     @Autowired
     private UserRepository userRepository;
@@ -143,6 +153,37 @@ class GoogleAuthControllerTest extends IntegrationTestSupport {
             googleLogin()
                     .andExpect(status().isConflict())
                     .andExpect(jsonPath("$.message").value("이미 가입된 이메일입니다."));
+        }
+
+        @Test
+        @DisplayName("조회와 저장 사이에 같은 구글 계정이 먼저 가입되면(버튼 두 번 클릭 등) 500이 아니라 그 계정으로 LOGGED_IN")
+        void concurrentSignupWithSameGoogleAccount() throws Exception {
+            givenGoogleAccount(GOOGLE_SUB, "new@gmail.com");
+            saveUserRightAfterEmailLookup("new@gmail.com",
+                    () -> User.createWithGoogle("new@gmail.com", GOOGLE_SUB, "new@gmail.com"));
+
+            googleLogin()
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.result").value("LOGGED_IN"))
+                    .andExpect(jsonPath("$.accessToken").isNotEmpty());
+
+            assertThat(userRepository.count()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("조회와 저장 사이에 같은 이메일로 이메일 가입이 먼저 끝나면 500이 아니라 LINK_REQUIRED")
+        void concurrentEmailSignupWithSameEmail() throws Exception {
+            givenGoogleAccount(GOOGLE_SUB, EMAIL);
+            saveUserRightAfterEmailLookup(EMAIL,
+                    () -> User.createWithPassword(EMAIL, passwordEncoder.encode(PASSWORD)));
+
+            googleLogin()
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.result").value("LINK_REQUIRED"))
+                    .andExpect(jsonPath("$.email").value(EMAIL));
+
+            assertThat(userRepository.count()).isEqualTo(1);
+            assertThat(userRepository.findByEmail(EMAIL).orElseThrow().isGoogleLinked()).isFalse();
         }
 
         @Test
@@ -304,6 +345,19 @@ class GoogleAuthControllerTest extends IntegrationTestSupport {
 
     private void givenGoogleAccount(String sub, String email) {
         given(googleOAuthClient.fetchUserInfo(CODE, REDIRECT_URI)).willReturn(new GoogleUserInfo(sub, email, true));
+    }
+
+    /*
+     * 동시에 들어온 다른 요청이 "이 요청의 이메일 조회 직후, 가입 저장 직전"에 회원 저장을 끝낸 상황을 만든다.
+     * 진짜 동시 요청은 순서가 매번 달라서 이 틈을 일부러 만든다. 끼어드는 건 첫 조회 한 번뿐이고, 다시 조회할 때는 그대로 조회한다.
+     * 저장은 다른 스레드에서 해서, 다른 요청처럼 자기 트랜잭션으로 바로 커밋되게 한다.
+     */
+    private void saveUserRightAfterEmailLookup(String email, Supplier<User> otherRequest) {
+        willAnswer(invocation -> {
+            Object result = invocation.callRealMethod();
+            CompletableFuture.runAsync(() -> userRepository.save(otherRequest.get())).join();
+            return result;
+        }).willCallRealMethod().given(userService).findByEmail(email);
     }
 
     // 같은 이메일 계정이 있는 상태에서 구글 로그인을 해서 LINK_REQUIRED의 linkToken을 받는다

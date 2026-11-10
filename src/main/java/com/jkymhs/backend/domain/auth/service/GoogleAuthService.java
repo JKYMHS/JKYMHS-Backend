@@ -44,22 +44,41 @@ public class GoogleAuthService {
     public GoogleLoginResponse login(GoogleLoginRequest request, String userAgent) {
         GoogleUserInfo google = googleOAuthClient.fetchUserInfo(request.code(), request.redirectUri());
 
+        Optional<GoogleLoginResponse> existing = loginExistingUser(google, userAgent);
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+
+        // 3) 처음 보는 구글 계정 → 비밀번호 없는 계정으로 가입
+        User user;
+        try {
+            user = userService.register(User.createWithGoogle(google.email(), google.sub(), google.email()));
+        } catch (DataIntegrityViolationException e) {
+            // 위 조회와 저장 사이에 같은 구글 계정(버튼 두 번 클릭 등)이나 같은 이메일 회원이 먼저 저장되면
+            // google_sub 또는 email UNIQUE 위반이 난다. 다시 조회해서 1)·2)와 똑같이 처리한다.
+            // 다시 조회해도 없으면 원인을 모르는 위반이라 그대로 던진다
+            return loginExistingUser(google, userAgent).orElseThrow(() -> e);
+        }
+        return GoogleLoginResponse.signedUp(tokenService.issue(user, userAgent), user.getOnboardingStatus());
+    }
+
+    /**
+     * 이미 있는 회원이면 1)·2) 응답을, 처음 보는 구글 계정이면 빈 값을 돌려준다.
+     */
+    private Optional<GoogleLoginResponse> loginExistingUser(GoogleUserInfo google, String userAgent) {
         // 1) 이 구글 계정(sub)이 연결된 회원 → 로그인
         Optional<User> linkedUser = userService.findByGoogleSub(google.sub());
         if (linkedUser.isPresent()) {
             User user = linkedUser.get();
-            return GoogleLoginResponse.loggedIn(tokenService.issue(user, userAgent), user.getOnboardingStatus());
+            return Optional.of(GoogleLoginResponse.loggedIn(tokenService.issue(user, userAgent), user.getOnboardingStatus()));
         }
 
         // 2) 같은 이메일로 가입한 회원 → 비밀번호를 확인한 뒤 연결해야 한다
         Optional<User> sameEmailUser = userService.findByEmail(google.email());
         if (sameEmailUser.isPresent()) {
-            return linkRequired(sameEmailUser.get(), google);
+            return Optional.of(linkRequired(sameEmailUser.get(), google));
         }
-
-        // 3) 처음 보는 구글 계정 → 비밀번호 없는 계정으로 가입
-        User user = userService.register(User.createWithGoogle(google.email(), google.sub(), google.email()));
-        return GoogleLoginResponse.signedUp(tokenService.issue(user, userAgent), user.getOnboardingStatus());
+        return Optional.empty();
     }
 
     /**
