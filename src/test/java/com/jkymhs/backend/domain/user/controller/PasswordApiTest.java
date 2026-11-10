@@ -90,7 +90,7 @@ class PasswordApiTest extends MemberApiTestSupport {
         void invalidFormat() throws Exception {
             String token = accessToken(saveEmailUser());
 
-            for (String password : new String[]{"onlyletters", "12345678", "ab1", "abc 12345"}) {
+            for (String password : new String[]{"onlyletters", "12345678", "ab1", "abc 12345", "비밀번호abc123"}) {
                 change(token, PASSWORD, password)
                         .andExpect(status().isBadRequest())
                         .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
