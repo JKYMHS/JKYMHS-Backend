@@ -100,6 +100,49 @@ batch:
   # 배치가 실패하면 {"text": "..."}를 이 주소로 POST한다 (슬랙·디스코드 웹훅 등). 비어 있으면 ERROR 로그만 남긴다
   alert-webhook-url: ${BATCH_ALERT_WEBHOOK_URL:}
 
+# 카카오 로컬 API (출발지 검색·현재 위치 → 주소)
+kakao-local:
+  base-url: https://dapi.kakao.com
+  # 카카오 개발자 앱의 REST API 키. 비밀값이라 환경변수로만 넣는다. 비어 있으면 출발지 검색만 502로 실패한다
+  rest-api-key: ${KAKAO_REST_API_KEY:}
+  # 사용자가 화면에서 기다리는 요청이라 짧게 둔다
+  timeout: 3s
+
+# 탐색 화면 규칙
+explore:
+  # 닫기 몇 분 전부터 "곧 마감(soon)"으로 보여줄지
+  closing-soon-minutes: 60
+  # 목록 한 페이지 최대 개수 (size 파라미터 상한)
+  page-size-max: 50
+
+# 상세 화면 캐시
+content-detail:
+  # 소개글·사진을 받은 지 이만큼 지나면 다음 조회 때 TourAPI에서 다시 받는다 (하루 호출 한도를 아끼려고 길게 둔다)
+  refresh-after: 7d
+  # 같은 콘텐츠를 여러 요청이 동시에 다시 받지 않게 거는 락의 유효 시간 (갱신이 멈춰도 이 시간 뒤엔 풀린다)
+  lock-ttl: 10s
+
+# 인기 점수 배치
+popularity:
+  # 매시 정각(KST)에 최근 조회·찜·일정 담기 수로 인기 점수(0~1000)를 다시 계산한다
+  cron: "0 0 * * * *"
+  # 인기 점수에 넣을 최근 기간
+  window: 30d
+
+# 행동 데이터·취향 프로필
+behavior:
+  # 오래된 행동일수록 덜 반영한다. 이 기간이 지나면 가중치가 절반이 된다
+  half-life: 30d
+  # 프로필을 계산할 때 이 기간보다 오래된 행동은 버린다
+  profile-window: 180d
+  # 동행별 프로필은 신호가 이 개수 이상일 때만 쓰고, 그 전에는 공통 프로필을 쓴다
+  companion-min-signals: 10
+  # 행동 이벤트를 요청 스레드 밖에서 저장하는 전용 스레드 풀
+  executor:
+    core-size: 2
+    max-size: 4
+    queue-capacity: 500
+
 # 경로 계산: 카카오모빌리티 자동차 길찾기 (택시 시간·도로 경로). 키는 카카오 로컬과 같은 REST API 키를 쓴다
 kakao-mobility:
   base-url: ${KAKAO_MOBILITY_BASE_URL:https://apis-navi.kakaomobility.com}
