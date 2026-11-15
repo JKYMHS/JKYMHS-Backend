@@ -1,6 +1,7 @@
 package com.jkymhs.backend.domain.auth.service;
 
 import com.jkymhs.backend.domain.auth.dto.request.LoginRequest;
+import com.jkymhs.backend.domain.auth.dto.request.PasswordResetRequest;
 import com.jkymhs.backend.domain.auth.dto.request.SignupRequest;
 import com.jkymhs.backend.domain.auth.dto.response.LoginResponse;
 import com.jkymhs.backend.domain.auth.entity.VerificationPurpose;
@@ -18,7 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 이메일 회원가입과 이메일·비밀번호 로그인.
+ * 이메일 회원가입, 이메일·비밀번호 로그인, 비밀번호 재설정.
  */
 @Service
 @RequiredArgsConstructor
@@ -84,6 +85,30 @@ public class AuthService {
         return issueTokens(user, userAgent);
     }
 
+    /**
+     * 비밀번호를 잊은 회원이 이메일 인증으로 본인 확인을 하고 새 비밀번호를 정한다 (로그인하지 않은 상태).
+     * 순서: verificationToken 확인과 폐기(401) → 회원 조회와 잠금(401) → 새 비밀번호 저장 → 모든 기기 로그아웃 → 로그인 실패 기록 삭제.
+     *
+     * 가입하지 않은 이메일도 토큰 오류와 같은 401을 준다. 인증 메일 발송도 가입 여부와 상관없이 같은 200을 주므로,
+     * 어느 단계의 응답으로도 가입 여부를 알 수 없다.
+     * 구글로만 가입한 회원도 여기서 비밀번호가 생기고, 이후에는 이메일·비밀번호 로그인도 된다 (이메일 인증으로 본인 확인을 했으니 막을 이유가 없다).
+     */
+    @Transactional
+    public void resetPassword(PasswordResetRequest request) {
+        String email = request.email();
+        // 토큰은 확인하는 순간 폐기된다. 같은 토큰으로 두 번 재설정할 수 없다 (아래에서 실패해 롤백돼도 토큰은 되살아나지 않는다)
+        verificationTokenService.consume(VerificationPurpose.RESET_PASSWORD, email, request.verificationToken());
+
+        User user = getResetTarget(email);
+        user.changePassword(passwordEncoder.encode(request.newPassword()));
+
+        // 비밀번호를 잊었거나 유출돼서 바꾸는 경우라, 이미 로그인된 다른 기기도 모두 끊는다 (리프레시 토큰 전부 삭제)
+        tokenService.revokeAll(user.getId());
+        // 실패 5회로 잠긴 계정도 새 비밀번호로 바로 로그인할 수 있게 실패 기록을 지운다.
+        // Redis는 롤백되지 않아서, DB 작업이 다 끝난 마지막에 지운다
+        loginAttemptService.reset(email);
+    }
+
     private AuthResult<LoginResponse> issueTokens(User user, String userAgent) {
         IssuedTokens tokens = tokenService.issue(user, userAgent);
         return new AuthResult<>(LoginResponse.of(tokens, user.getOnboardingStatus()), tokens.refreshToken());
@@ -95,6 +120,22 @@ public class AuthService {
             return userService.register(User.createWithPassword(email, passwordEncoder.encode(rawPassword)));
         } catch (DataIntegrityViolationException e) {
             throw new CustomException(ErrorCode.EMAIL_ALREADY_EXISTS);
+        }
+    }
+
+    /*
+     * 같은 회원의 비밀번호 변경·탈퇴와 겹치지 않게 회원 행을 잠그고(SELECT ... FOR UPDATE) 가져온다.
+     * 가입하지 않은 이메일, 이메일 조회와 잠금 사이에 탈퇴가 끝나서 없어진 회원 모두 토큰 오류와 똑같은 401이다
+     * (응답 본문까지 같아야 가입 여부가 드러나지 않는다).
+     */
+    private User getResetTarget(String email) {
+        Long userId = userService.findByEmail(email)
+                .map(User::getId)
+                .orElseThrow(VerificationTokenService::notVerified);
+        try {
+            return userService.getByIdForUpdate(userId);
+        } catch (CustomException e) {
+            throw VerificationTokenService.notVerified();
         }
     }
 
