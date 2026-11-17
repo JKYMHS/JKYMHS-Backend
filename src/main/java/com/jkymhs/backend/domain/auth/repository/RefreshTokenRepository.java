@@ -48,4 +48,15 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
             where r.user.id = :userId and r.familyId = :familyId and (r.revokedAt is null or r.rotatedAt is not null)
             """)
     int revokeFamily(Long userId, String familyId, LocalDateTime now);
+
+    /*
+     * 그 회원의 리프레시 토큰을 모두 지운다 (비밀번호 변경·탈퇴).
+     * 폐기(UPDATE) 대신 지우는 이유: 탈퇴는 users 행을 지우기 전에 FK가 걸린 토큰 행을 먼저 없애야 하고,
+     * 비밀번호를 바꾼 뒤에는 옛 토큰이 다시 와도 "없는 토큰 → 401"이면 충분해서 폐기 기록을 남길 필요가 없다.
+     * flushAutomatically: 이 DELETE 전에 같은 트랜잭션에서 바꾼 엔티티(새 비밀번호 해시 등)를 먼저 DB에 쓴다.
+     * clearAutomatically가 1차 캐시를 비우므로, 먼저 쓰지 않으면 그 변경이 버려진다.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("delete from RefreshToken r where r.user.id = :userId")
+    int deleteAllByUserId(Long userId);
 }

@@ -1,6 +1,9 @@
 package com.jkymhs.backend.domain.user.entity;
 
 import com.jkymhs.backend.global.entity.BaseTimeEntity;
+import com.jkymhs.backend.global.exception.CustomException;
+import com.jkymhs.backend.global.exception.ErrorCode;
+import com.jkymhs.backend.global.model.Companion;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -52,6 +55,16 @@ public class User extends BaseTimeEntity {
     @Column(nullable = false, length = 20)
     private OnboardingStatus onboardingStatus;
 
+    // 마이페이지에서 정하는 표시 이름. 정하지 않았으면 null이고, 화면에는 이메일 앞부분을 보여준다 (displayName)
+    @Column(length = 30)
+    private String nickname;
+
+    // 마지막으로 AI 추천을 요청할 때 고른 동행. 다음 추천 화면의 기본값으로 쓴다 (FUNC-003-01 "기본값 = 지난번 선택")
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(name = "last_companion_type", length = 20)
+    private Companion lastCompanion;
+
     private User(String email, String passwordHash, String googleSub, String googleEmail) {
         this.email = email;
         this.passwordHash = passwordHash;
@@ -82,5 +95,49 @@ public class User extends BaseTimeEntity {
 
     public boolean isGoogleLinked() {
         return googleSub != null;
+    }
+
+    // 이름을 정하지 않았으면 이메일의 @ 앞부분을 이름처럼 보여준다
+    public String displayName() {
+        if (nickname != null) {
+            return nickname;
+        }
+        int at = email.indexOf('@');
+        return at < 0 ? email : email.substring(0, at);
+    }
+
+    public void changeNickname(String nickname) {
+        this.nickname = nickname;
+    }
+
+    // 취향을 저장하면 온보딩이 끝난 것이다. 건너뛰었던 회원(SKIPPED)도 나중에 마이페이지에서 저장하면 DONE이 된다
+    public void completeOnboarding() {
+        this.onboardingStatus = OnboardingStatus.DONE;
+    }
+
+    // 취향을 이미 저장한 회원이 건너뛰면 저장한 취향이 무시되는 것처럼 보여서 막는다
+    public void skipOnboarding() {
+        if (onboardingStatus == OnboardingStatus.DONE) {
+            throw new CustomException(ErrorCode.ONBOARDING_ALREADY_DONE);
+        }
+        this.onboardingStatus = OnboardingStatus.SKIPPED;
+    }
+
+    public void unlinkGoogle() {
+        this.googleSub = null;
+        this.googleEmail = null;
+    }
+
+    public void changePassword(String passwordHash) {
+        this.passwordHash = passwordHash;
+    }
+
+    // 구글로만 가입한 회원이 처음 비밀번호를 정한다. 이후에는 이메일·비밀번호 로그인도 된다
+    public void setInitialPassword(String passwordHash) {
+        this.passwordHash = passwordHash;
+    }
+
+    public void rememberCompanion(Companion companion) {
+        this.lastCompanion = companion;
     }
 }

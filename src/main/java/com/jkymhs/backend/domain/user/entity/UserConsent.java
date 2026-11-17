@@ -24,7 +24,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.LocalDateTime;
 
 /**
- * 회원 한 명의 약관 동의 한 항목. 회원마다 항목별로 한 행씩, 5행이 생긴다.
+ * 회원 한 명의 약관 동의 한 항목. 이메일 가입 회원은 가입할 때 항목별로 한 행씩 생긴다.
+ * 구글로 가입한 회원은 가입 API가 동의를 받지 않아서 행이 없을 수 있고, 동의 변경(PUT)이 처음 저장할 때 만든다.
  * 동의하지 않은 선택 항목도 agreed = false로 저장해서 "언제 무엇에 동의했는지"를 항목별로 남긴다.
  */
 @Getter
@@ -70,5 +71,18 @@ public class UserConsent {
 
     public static UserConsent create(User user, ConsentType consentType, boolean agreed, LocalDateTime now) {
         return new UserConsent(user, consentType, agreed, now);
+    }
+
+    /**
+     * 동의 여부를 바꾼다. 이미 동의한 항목에 다시 동의하면 처음 동의한 시각을 그대로 둔다
+     * ("언제 동의했는지"가 같은 값을 다시 보낼 때마다 바뀌면 기록으로 쓸 수 없다).
+     */
+    public void change(boolean agreed, LocalDateTime now) {
+        if (agreed && !this.agreed) {
+            this.agreedAt = now;
+        } else if (!agreed) {
+            this.agreedAt = null;
+        }
+        this.agreed = agreed;
     }
 }

@@ -3,6 +3,7 @@ package com.jkymhs.backend.global.exception;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
@@ -16,6 +17,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(CustomExceptionMessageTest.TestController.class)
+// 인증 브랜치와 합쳐지면 스프링 시큐리티가 테스트 컨트롤러까지 막는다(401). 여기서는 에러 응답·변환만 보므로 보안 필터를 끈다
+@AutoConfigureMockMvc(addFilters = false)
 @Import(CustomExceptionMessageTest.TestController.class)
 class CustomExceptionMessageTest {
 

@@ -72,7 +72,7 @@ class SignupApiTest extends IntegrationTestSupport {
     private JwtProvider jwtProvider;
 
     @Test
-    @DisplayName("가입하면 201과 액세스 토큰, 리프레시 토큰 쿠키를 주고, 회원·약관 동의 5개·리프레시 토큰을 저장한다")
+    @DisplayName("가입하면 201과 액세스 토큰, 리프레시 토큰 쿠키를 주고, 회원·약관 동의 6개·리프레시 토큰을 저장한다")
     void signup() throws Exception {
         String verificationToken = verificationTokenService.issue(VerificationPurpose.SIGNUP, EMAIL);
 
@@ -92,13 +92,15 @@ class SignupApiTest extends IntegrationTestSupport {
 
         Map<ConsentType, UserConsent> consents = userConsentRepository.findAll().stream()
                 .collect(Collectors.toMap(UserConsent::getConsentType, Function.identity()));
-        assertThat(consents).hasSize(5);
+        assertThat(consents).hasSize(6);
         for (ConsentType type : List.of(ConsentType.AGE_14, ConsentType.TERMS, ConsentType.PRIVACY, ConsentType.BEHAVIOR_DATA)) {
             assertThat(consents.get(type).isAgreed()).isTrue();
             assertThat(consents.get(type).getAgreedAt()).isNotNull();
         }
         assertThat(consents.get(ConsentType.EMAIL_NOTIFICATION).isAgreed()).isFalse();
         assertThat(consents.get(ConsentType.EMAIL_NOTIFICATION).getAgreedAt()).isNull();
+        // 위치 정보 동의는 가입 화면에서 받지 않아서 미동의로 저장된다
+        assertThat(consents.get(ConsentType.LOCATION).isAgreed()).isFalse();
         assertThat(consents.values()).allSatisfy(consent -> assertThat(consent.getUpdatedAt()).isNotNull());
 
         assertThat(refreshTokenRepository.count()).isEqualTo(1);
@@ -171,15 +173,30 @@ class SignupApiTest extends IntegrationTestSupport {
             "abcdefgh",              // 숫자 없음
             "12345678",              // 영문 없음
             "abc123456789012345678", // 21자
-            "abc 12345"              // 공백 포함
+            "abc 12345",             // 공백 포함
+            "비밀번호abc123",          // 한글 포함
+            "a1😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀" // 이모지 포함: 20자지만 74바이트라 BCrypt가 저장하지 못한다 (예전엔 500)
     })
-    @DisplayName("비밀번호 규칙(영문+숫자 포함 8~20자, 공백 불가)을 어기면 400")
+    @DisplayName("비밀번호 규칙(영문+숫자 포함 8~20자, 키보드 기본 문자만)을 어기면 400")
     void invalidPassword(String password) throws Exception {
         String verificationToken = verificationTokenService.issue(VerificationPurpose.SIGNUP, EMAIL);
 
         signup(EMAIL, verificationToken, password, CONSENTS)
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(PASSWORD_POLICY_MESSAGE));
+    }
+
+    @Test
+    @DisplayName("특수문자가 들어간 비밀번호로도 가입할 수 있다")
+    void passwordWithSpecialCharacters() throws Exception {
+        String password = "Abc123!@#$%^&*~";
+        String verificationToken = verificationTokenService.issue(VerificationPurpose.SIGNUP, EMAIL);
+
+        signup(EMAIL, verificationToken, password, CONSENTS)
+                .andExpect(status().isCreated());
+
+        User user = userRepository.findByEmail(EMAIL).orElseThrow();
+        assertThat(passwordEncoder.matches(password, user.getPasswordHash())).isTrue();
     }
 
     @Test

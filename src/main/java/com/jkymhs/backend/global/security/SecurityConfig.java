@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -59,6 +60,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
                         // 컨트롤러에서 예외가 나면 스프링이 /error로 다시 보내는데, 여기를 막으면 원래 에러 대신 401이 나간다
                         .requestMatchers("/error").permitAll()
+                        // 로그인 없이 보는 고정 목록: 지역·카테고리(탐색 필터), 여행 스타일(온보딩). 조회(GET)만 연다
+                        .requestMatchers(HttpMethod.GET, "/api/regions", "/api/categories", "/api/travel-styles").permitAll()
                         .anyRequest().authenticated()
                 )
 
