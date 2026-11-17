@@ -124,9 +124,11 @@ class ContentAutocompleteApiTest extends ClockTestSupport {
     void tooShort() throws Exception {
         mockMvc.perform(get("/api/contents/autocomplete").param("q", "경!"))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
                 .andExpect(jsonPath("$.message").value("검색어는 2자 이상 입력해주세요."));
         mockMvc.perform(get("/api/contents/autocomplete"))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
                 .andExpect(jsonPath("$.message").value("검색어는 2자 이상 입력해주세요."));
     }
 

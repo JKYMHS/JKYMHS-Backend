@@ -273,6 +273,7 @@ class ContentListApiTest extends ClockTestSupport {
                 .andExpect(jsonPath("$.items[*].name").value(contains("덕수궁")));
         mockMvc.perform(get("/api/contents").param("tab", "place").param("q", "경%!"))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
                 .andExpect(jsonPath("$.message").value("검색어는 2자 이상 입력해주세요."));
     }
 
@@ -299,6 +300,7 @@ class ContentListApiTest extends ClockTestSupport {
                 .andExpect(jsonPath("$.items.length()").value(4));
         mockMvc.perform(get("/api/contents").param("tab", "place").param("categoryId", festivalCategory.toString()))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
                 .andExpect(jsonPath("$.message").value("잘못된 필터 값입니다."));
     }
 
@@ -317,7 +319,8 @@ class ContentListApiTest extends ClockTestSupport {
         expectInvalidFilter(get("/api/contents").param("tab", "place").param("size", "51"));
         expectInvalidFilter(get("/api/contents").param("tab", "place").param("size", "0"));
         mockMvc.perform(get("/api/contents").param("tab", "beach"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
     }
 
     @Test
@@ -325,16 +328,19 @@ class ContentListApiTest extends ClockTestSupport {
     void invalidCursor() throws Exception {
         mockMvc.perform(get("/api/contents").param("tab", "place").param("cursor", "not-a-cursor"))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_CURSOR"))
                 .andExpect(jsonPath("$.message").value("목록을 처음부터 다시 불러옵니다."));
 
         JsonNode byName = read(get("/api/contents").param("tab", "place").param("sort", "name").param("size", "1"));
         mockMvc.perform(get("/api/contents").param("tab", "place").param("sort", "popular")
                         .param("cursor", byName.path("nextCursor").asString()))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_CURSOR"))
                 .andExpect(jsonPath("$.message").value("목록을 처음부터 다시 불러옵니다."));
         mockMvc.perform(get("/api/contents").param("tab", "festival").param("sort", "name")
                         .param("cursor", byName.path("nextCursor").asString()))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
     }
 
     @Test
@@ -346,6 +352,7 @@ class ContentListApiTest extends ClockTestSupport {
         mockMvc.perform(get("/api/contents").param("tab", "place").param("size", "1")
                         .param("cursor", first.path("nextCursor").asString()))
                 .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CURSOR_VERSION_MISMATCH"))
                 .andExpect(jsonPath("$.message").value("목록이 갱신되었습니다. 처음부터 다시 불러옵니다."));
 
         JsonNode fresh = read(get("/api/contents").param("tab", "place").param("size", "1"));
@@ -358,6 +365,7 @@ class ContentListApiTest extends ClockTestSupport {
     private void expectInvalidFilter(RequestBuilder request) throws Exception {
         mockMvc.perform(request)
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
                 .andExpect(jsonPath("$.message").value("잘못된 필터 값입니다."));
     }
 

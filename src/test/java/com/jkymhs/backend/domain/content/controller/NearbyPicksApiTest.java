@@ -89,8 +89,10 @@ class NearbyPicksApiTest extends ClockTestSupport {
 
         mockMvc.perform(get("/api/contents/1/nearby-picks"))
                 .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
                 .andExpect(jsonPath("$.message").value("존재하지 않거나 삭제된 장소입니다."));
         mockMvc.perform(get("/api/contents/12345/nearby-picks"))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
     }
 }

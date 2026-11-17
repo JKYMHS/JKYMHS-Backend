@@ -16,9 +16,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * 이 브랜치에는 Security가 없어서 토큰 없이 부른다. 로그인 필요(401) 테스트는 SecurityConfig가 있는 브랜치(D3)에서 추가한다.
- */
 class PlaceSearchApiTest extends KakaoLocalTestSupport {
 
     private static final String KEYWORD_BODY = """
@@ -48,7 +45,7 @@ class PlaceSearchApiTest extends KakaoLocalTestSupport {
         kakao.expect(requestTo(startsWith(BASE_URL + "/v2/local/search/address.json")))
                 .andRespond(withSuccess(ADDRESS_BODY, MediaType.APPLICATION_JSON));
 
-        mockMvc.perform(get("/api/places/search").param("q", "용산역"))
+        call(get("/api/places/search").param("q", "용산역"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[*].name").value(contains("용산역", "용산역 광장", "서울 용산구 한강대로 405")))
                 .andExpect(jsonPath("$.items[0].placeId").value("21160"))
@@ -70,8 +67,9 @@ class PlaceSearchApiTest extends KakaoLocalTestSupport {
     void kakaoServerError() throws Exception {
         kakao.expect(requestTo(startsWith(BASE_URL + "/v2/local/search/keyword.json"))).andRespond(withServerError());
 
-        mockMvc.perform(get("/api/places/search").param("q", "용산역"))
+        call(get("/api/places/search").param("q", "용산역"))
                 .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.code").value("EXTERNAL_API_ERROR"))
                 .andExpect(jsonPath("$.message").value("주소 검색에 실패했습니다. 다시 시도해주세요."));
         kakao.verify();
     }
@@ -81,8 +79,9 @@ class PlaceSearchApiTest extends KakaoLocalTestSupport {
     void blankKey() throws Exception {
         useClient("");
 
-        mockMvc.perform(get("/api/places/search").param("q", "용산역"))
+        call(get("/api/places/search").param("q", "용산역"))
                 .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.code").value("EXTERNAL_API_ERROR"))
                 .andExpect(jsonPath("$.message").value("주소 검색에 실패했습니다. 다시 시도해주세요."));
         kakao.verify();
     }
@@ -90,12 +89,24 @@ class PlaceSearchApiTest extends KakaoLocalTestSupport {
     @Test
     @DisplayName("검색어가 없거나 2자 미만이면 400이다")
     void tooShort() throws Exception {
-        mockMvc.perform(get("/api/places/search").param("q", " 용 "))
+        call(get("/api/places/search").param("q", " 용 "))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
                 .andExpect(jsonPath("$.message").value("검색어는 2자 이상 입력해주세요."));
-        mockMvc.perform(get("/api/places/search"))
+        call(get("/api/places/search"))
                 .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
                 .andExpect(jsonPath("$.message").value("검색어는 2자 이상 입력해주세요."));
+        kakao.verify();
+    }
+
+    @Test
+    @DisplayName("로그인하지 않으면 401이고 카카오를 부르지 않는다")
+    void unauthorized() throws Exception {
+        mockMvc.perform(get("/api/places/search").param("q", "용산역"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
+                .andExpect(jsonPath("$.message").value("인증이 필요합니다."));
         kakao.verify();
     }
 }
