@@ -18,12 +18,16 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 
 /**
  * 기기(로그인 세션)마다 하나씩 생기는 리프레시 토큰.
  * DB가 유출돼도 토큰을 그대로 쓸 수 없도록 원문 대신 SHA-256 해시만 저장한다.
- * 폐기할 때 행을 지우지 않고 revokedAt을 채운다. 폐기된 토큰이 다시 오면 탈취로 판단하기 위해서다.
+ * 폐기할 때 행을 지우지 않고 revokedAt을 채운다. 폐기된 토큰이 다시 오면 탈취인지 판단해야 하기 때문이다.
+ *
+ * familyId는 "한 기기의 로그인 하나"를 나타낸다. 로그인할 때 새로 정하고, 재발급으로 이어지는 토큰은 같은 값을 물려받는다.
+ * 재발급할 때마다 토큰 값이 바뀌어도 이 값으로 같은 로그인임을 알 수 있어서, 로그아웃이 그 로그인의 토큰을 통째로 폐기할 수 있다.
  */
 @Getter
 @Entity
@@ -44,6 +48,9 @@ public class RefreshToken {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    @Column(nullable = false, length = 36)
+    private String familyId;
+
     @Column(nullable = false)
     private String tokenHash;
 
@@ -54,20 +61,24 @@ public class RefreshToken {
 
     private LocalDateTime revokedAt;
 
+    // 재발급으로 교체된 시각. 로그아웃이나 일괄 폐기로 폐기된 토큰은 null이다. 탈취 판단은 이 값이 있는 토큰만 한다
+    private LocalDateTime rotatedAt;
+
     // users와 달리 updated_at 컬럼이 없어서 BaseTimeEntity를 상속하지 않는다
     @CreatedDate
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    private RefreshToken(User user, String tokenHash, String userAgent, LocalDateTime expiresAt) {
+    private RefreshToken(User user, String familyId, String tokenHash, String userAgent, LocalDateTime expiresAt) {
         this.user = user;
+        this.familyId = familyId;
         this.tokenHash = tokenHash;
         this.userAgent = truncate(userAgent);
         this.expiresAt = expiresAt;
     }
 
-    public static RefreshToken issue(User user, String tokenHash, String userAgent, LocalDateTime expiresAt) {
-        return new RefreshToken(user, tokenHash, userAgent, expiresAt);
+    public static RefreshToken issue(User user, String familyId, String tokenHash, String userAgent, LocalDateTime expiresAt) {
+        return new RefreshToken(user, familyId, tokenHash, userAgent, expiresAt);
     }
 
     public boolean isRevoked() {
@@ -82,6 +93,20 @@ public class RefreshToken {
         if (revokedAt == null) {
             revokedAt = now;
         }
+    }
+
+    // 재발급으로 새 토큰으로 바뀔 때 부른다. 로그아웃은 revoke만 부르므로 rotatedAt이 비어 있다
+    public void rotate(LocalDateTime now) {
+        revoke(now);
+        rotatedAt = now;
+    }
+
+    public boolean isRotated() {
+        return rotatedAt != null;
+    }
+
+    public boolean isRotatedWithin(Duration period, LocalDateTime now) {
+        return isRotated() && rotatedAt.plus(period).isAfter(now);
     }
 
     // 브라우저 User-Agent는 255자를 넘을 수 있어서 컬럼 길이에 맞게 자른다

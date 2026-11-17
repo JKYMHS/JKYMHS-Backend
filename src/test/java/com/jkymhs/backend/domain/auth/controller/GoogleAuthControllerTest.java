@@ -12,6 +12,7 @@ import com.jkymhs.backend.domain.user.service.UserService;
 import com.jkymhs.backend.global.exception.CustomException;
 import com.jkymhs.backend.global.exception.ErrorCode;
 import com.jkymhs.backend.support.IntegrationTestSupport;
+import com.jkymhs.backend.support.RefreshTokenCookies;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -65,7 +66,7 @@ class GoogleAuthControllerTest extends IntegrationTestSupport {
     class GoogleLogin {
 
         @Test
-        @DisplayName("구글 계정이 연결된 회원이면 LOGGED_IN과 토큰을 준다")
+        @DisplayName("구글 계정이 연결된 회원이면 LOGGED_IN과 액세스 토큰, 리프레시 토큰 쿠키를 준다")
         void loggedIn() throws Exception {
             userRepository.save(User.createWithGoogle(EMAIL, GOOGLE_SUB, EMAIL));
             givenGoogleAccount(GOOGLE_SUB, EMAIL);
@@ -74,16 +75,17 @@ class GoogleAuthControllerTest extends IntegrationTestSupport {
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.result").value("LOGGED_IN"))
                     .andExpect(jsonPath("$.accessToken").isNotEmpty())
-                    .andExpect(jsonPath("$.refreshToken").isNotEmpty())
+                    .andExpect(jsonPath("$.refreshToken").doesNotExist())
                     .andExpect(jsonPath("$.onboardingStatus").value("NOT_STARTED"))
                     .andExpect(jsonPath("$.linkToken").doesNotExist())
-                    .andExpect(jsonPath("$.email").doesNotExist());
+                    .andExpect(jsonPath("$.email").doesNotExist())
+                    .andExpect(RefreshTokenCookies.issued());
 
             assertThat(refreshTokenRepository.count()).isEqualTo(1);
         }
 
         @Test
-        @DisplayName("처음 보는 구글 계정이면 비밀번호 없는 계정을 만들고 SIGNED_UP과 토큰을 준다")
+        @DisplayName("처음 보는 구글 계정이면 비밀번호 없는 계정을 만들고 SIGNED_UP과 액세스 토큰, 리프레시 토큰 쿠키를 준다")
         void signedUp() throws Exception {
             givenGoogleAccount(GOOGLE_SUB, "new@gmail.com");
 
@@ -91,8 +93,9 @@ class GoogleAuthControllerTest extends IntegrationTestSupport {
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.result").value("SIGNED_UP"))
                     .andExpect(jsonPath("$.accessToken").isNotEmpty())
-                    .andExpect(jsonPath("$.refreshToken").isNotEmpty())
-                    .andExpect(jsonPath("$.onboardingStatus").value("NOT_STARTED"));
+                    .andExpect(jsonPath("$.refreshToken").doesNotExist())
+                    .andExpect(jsonPath("$.onboardingStatus").value("NOT_STARTED"))
+                    .andExpect(RefreshTokenCookies.issued());
 
             User user = userRepository.findByGoogleSub(GOOGLE_SUB).orElseThrow();
             assertThat(user.getEmail()).isEqualTo("new@gmail.com");
@@ -103,7 +106,7 @@ class GoogleAuthControllerTest extends IntegrationTestSupport {
         }
 
         @Test
-        @DisplayName("같은 이메일의 이메일 가입 계정이 있으면 LINK_REQUIRED와 linkToken만 주고, 연결 정보를 Redis에 10분 저장한다")
+        @DisplayName("같은 이메일의 이메일 가입 계정이 있으면 LINK_REQUIRED와 linkToken만 주고(쿠키 없음), 연결 정보를 Redis에 10분 저장한다")
         void linkRequired() throws Exception {
             User user = saveEmailUser();
             // 구글 이메일 대소문자가 달라도 같은 이메일로 본다
@@ -117,6 +120,7 @@ class GoogleAuthControllerTest extends IntegrationTestSupport {
                     .andExpect(jsonPath("$.accessToken").doesNotExist())
                     .andExpect(jsonPath("$.refreshToken").doesNotExist())
                     .andExpect(jsonPath("$.onboardingStatus").doesNotExist())
+                    .andExpect(RefreshTokenCookies.absent())
                     .andReturn().getResponse().getContentAsString();
 
             String key = AuthRedisKeys.googleLink(JsonPath.read(body, "$.linkToken"));
@@ -194,6 +198,7 @@ class GoogleAuthControllerTest extends IntegrationTestSupport {
 
             googleLogin()
                     .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.code").value("GOOGLE_AUTH_FAILED"))
                     .andExpect(jsonPath("$.message").value("구글 인증에 실패했습니다. 다시 시도해주세요."))
                     .andExpect(jsonPath("$.description").value("인가 코드 만료·재사용"));
 
@@ -208,6 +213,7 @@ class GoogleAuthControllerTest extends IntegrationTestSupport {
 
             googleLogin()
                     .andExpect(status().isBadGateway())
+                    .andExpect(jsonPath("$.code").value("GOOGLE_SERVER_ERROR"))
                     .andExpect(jsonPath("$.message").value("구글 서버와 통신하지 못했습니다."));
         }
 
@@ -229,7 +235,7 @@ class GoogleAuthControllerTest extends IntegrationTestSupport {
     class GoogleLink {
 
         @Test
-        @DisplayName("비밀번호가 맞으면 구글 계정을 연결하고 토큰을 준다. 이후 같은 구글 계정으로 로그인하면 LOGGED_IN")
+        @DisplayName("비밀번호가 맞으면 구글 계정을 연결하고 액세스 토큰과 리프레시 토큰 쿠키를 준다. 이후 같은 구글 계정으로 로그인하면 LOGGED_IN")
         void linkSuccess() throws Exception {
             User user = saveEmailUser();
             String linkToken = requestLinkToken();
@@ -239,8 +245,9 @@ class GoogleAuthControllerTest extends IntegrationTestSupport {
             link(linkToken, PASSWORD)
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.accessToken").isNotEmpty())
-                    .andExpect(jsonPath("$.refreshToken").isNotEmpty())
-                    .andExpect(jsonPath("$.onboardingStatus").value("NOT_STARTED"));
+                    .andExpect(jsonPath("$.refreshToken").doesNotExist())
+                    .andExpect(jsonPath("$.onboardingStatus").value("NOT_STARTED"))
+                    .andExpect(RefreshTokenCookies.issued());
 
             User linked = userRepository.findById(user.getId()).orElseThrow();
             assertThat(linked.getGoogleSub()).isEqualTo(GOOGLE_SUB);
@@ -263,6 +270,7 @@ class GoogleAuthControllerTest extends IntegrationTestSupport {
 
             link(linkToken, "wrong-password")
                     .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.code").value("INVALID_LINK_PASSWORD"))
                     .andExpect(jsonPath("$.message").value("비밀번호가 올바르지 않습니다."));
 
             assertThat(redisTemplate.opsForHash().get(AuthRedisKeys.loginFail(EMAIL), "failCount")).isEqualTo("1");
@@ -319,6 +327,7 @@ class GoogleAuthControllerTest extends IntegrationTestSupport {
 
             link(linkToken, PASSWORD)
                     .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("GOOGLE_ACCOUNT_ALREADY_LINKED"))
                     .andExpect(jsonPath("$.message").value("다른 계정에 이미 연결된 구글 계정입니다."));
 
             assertThat(userRepository.findById(user.getId()).orElseThrow().isGoogleLinked()).isFalse();

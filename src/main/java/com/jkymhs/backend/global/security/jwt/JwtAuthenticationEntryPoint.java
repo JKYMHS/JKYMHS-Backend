@@ -16,7 +16,7 @@ import java.io.IOException;
  *
  * 시큐리티 필터는 컨트롤러보다 앞에서 동작해서 @RestControllerAdvice(GlobalExceptionHandler)가 예외를 잡지 못한다.
  * 그래서 HandlerExceptionResolver에 CustomException을 직접 넘겨서 GlobalExceptionHandler가 응답을 만들게 한다.
- * 이렇게 하면 401도 다른 에러와 똑같은 {message, status, timestamp, description} 형식이 된다.
+ * 이렇게 하면 401도 다른 에러와 똑같은 {code, message, status, timestamp, description} 형식이 된다.
  *
  * message는 명세대로 항상 "인증이 필요합니다."이고, 왜 실패했는지는 description으로 구분한다.
  * FE는 인증이 필요한 API에서 이 401을 받으면 토큰 재발급(/api/auth/reissue)을 한 번 시도하면 된다.

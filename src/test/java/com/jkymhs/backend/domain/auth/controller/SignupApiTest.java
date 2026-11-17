@@ -13,6 +13,7 @@ import com.jkymhs.backend.domain.user.repository.UserRepository;
 import com.jkymhs.backend.domain.user.service.UserService;
 import com.jkymhs.backend.global.security.jwt.JwtProvider;
 import com.jkymhs.backend.support.IntegrationTestSupport;
+import com.jkymhs.backend.support.RefreshTokenCookies;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -71,15 +72,16 @@ class SignupApiTest extends IntegrationTestSupport {
     private JwtProvider jwtProvider;
 
     @Test
-    @DisplayName("가입하면 201과 토큰을 주고, 회원·약관 동의 5개·리프레시 토큰을 저장한다")
+    @DisplayName("가입하면 201과 액세스 토큰, 리프레시 토큰 쿠키를 주고, 회원·약관 동의 5개·리프레시 토큰을 저장한다")
     void signup() throws Exception {
         String verificationToken = verificationTokenService.issue(VerificationPurpose.SIGNUP, EMAIL);
 
         String body = signup(EMAIL, verificationToken, PASSWORD, CONSENTS)
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.accessToken").isNotEmpty())
-                .andExpect(jsonPath("$.refreshToken").isNotEmpty())
+                .andExpect(jsonPath("$.refreshToken").doesNotExist())
                 .andExpect(jsonPath("$.onboardingStatus").value("NOT_STARTED"))
+                .andExpect(RefreshTokenCookies.issued())
                 .andReturn().getResponse().getContentAsString();
 
         User user = userRepository.findByEmail(EMAIL).orElseThrow();
@@ -120,6 +122,8 @@ class SignupApiTest extends IntegrationTestSupport {
 
         signup(EMAIL, "wrong-token", PASSWORD, CONSENTS)
                 .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("EMAIL_NOT_VERIFIED"))
+                .andExpect(RefreshTokenCookies.absent())
                 .andExpect(jsonPath("$.message").value("이메일 인증이 만료되었습니다. 다시 인증해주세요."));
 
         assertThat(userRepository.count()).isZero();
@@ -186,6 +190,7 @@ class SignupApiTest extends IntegrationTestSupport {
 
         signup(EMAIL, verificationToken, PASSWORD, CONSENTS)
                 .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("EMAIL_ALREADY_EXISTS"))
                 .andExpect(jsonPath("$.message").value("이미 가입된 이메일입니다."));
 
         assertThat(userRepository.count()).isEqualTo(1);
