@@ -142,6 +142,33 @@ class LoginApiTest extends IntegrationTestSupport {
         assertThat(redisTemplate.opsForValue().get(AuthRedisKeys.rateLimit(RateLimitType.LOGIN, DEFAULT_IP))).isEqualTo("21");
     }
 
+    @Test
+    @DisplayName("이메일이 254자를 넘으면 400이고, 로그인 실패 기록(Redis 키)을 만들지 않는다")
+    void tooLongEmail() throws Exception {
+        String longEmail = "a".repeat(243) + "@example.com";   // 255자
+
+        login(longEmail, PASSWORD)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("이메일은 254자 이하로 입력해주세요."));
+
+        assertThat(redisTemplate.hasKey(AuthRedisKeys.loginFail(longEmail))).isFalse();
+    }
+
+    @Test
+    @DisplayName("비밀번호가 72자를 넘으면 400이고, 72자까지는 틀린 비밀번호와 똑같이 401")
+    void passwordLengthLimit() throws Exception {
+        registerUser();
+
+        login(EMAIL, "a".repeat(73))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("비밀번호가 너무 깁니다."));
+        assertThat(redisTemplate.hasKey(AuthRedisKeys.loginFail(EMAIL))).isFalse();
+
+        login(EMAIL, "a".repeat(72))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value(INVALID_CREDENTIALS_MESSAGE));
+    }
+
     private void registerUser() {
         userService.register(User.createWithPassword(EMAIL, passwordEncoder.encode(PASSWORD)));
     }
