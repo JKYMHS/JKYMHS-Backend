@@ -1,0 +1,7 @@
+﻿content_id,content_type,tour_content_type_id,name,address,latitude,longitude,ldong_regn_cd,ldong_signgu_cd,lcls1,lcls2,tour_cat_code,thumbnail_url,event_start_date,event_end_date,tour_modified_at,tel,io
+126508,ATTRACTION,12,경복궁,서울특별시 종로구 사직로 161,37.5760836609,126.9767375783,11,110,HS,HS01,HS010100,https://img.test/1.jpg,,,2026-11-05 10:00:00,02-3700-3900,OUTDOOR
+129507,ATTRACTION,14,국립중앙박물관,서울특별시 용산구 서빙고로 137,37.5238506,126.9804702,11,170,VE,VE07,VE070100,,,,2026-11-06 11:30:00,,INDOOR
+3113671,FESTIVAL,15,"서울빛초롱축제, 2026",서울특별시 중구 청계천로,37.5692,126.9779,11,140,EV,EV01,EV010100,,2026-11-01,2026-11-30,2026-11-07 09:00:00,02-1234-5678,OUTDOOR
+3113672,FESTIVAL,15,날짜 없는 축제,서울특별시 중구,37.5692,126.9779,11,140,EV,EV01,EV010100,,,,2026-11-07 09:00:00,,OUTDOOR
+2800001,RESTAURANT,39,해운대 식당,부산광역시 해운대구,35.1631,129.1635,26,350,FD,FD01,FD010100,,,,2026-11-02 08:00:00,,INDOOR
+2800002,ATTRACTION,12,좌표 없는 곳,세종특별자치시,,,36110,36110,HS,HS01,HS010100,,,,2026-11-02 08:00:00,,
