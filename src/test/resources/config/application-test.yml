@@ -13,3 +13,7 @@ async:
 # TourAPI 재시도 사이 대기를 없앤다 (테스트가 실제로 기다리지 않게)
 tour-api:
   retry-backoff: 0ms
+
+# 캘린더 리프레시 토큰 암호화 키 (테스트 전용 고정값, base64로 32바이트)
+google-calendar:
+  token-encryption-key: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
