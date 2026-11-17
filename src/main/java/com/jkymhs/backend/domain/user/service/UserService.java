@@ -28,6 +28,10 @@ public class UserService {
         return userRepository.findByEmail(email);
     }
 
+    public Optional<User> findByGoogleSub(String googleSub) {
+        return userRepository.findByGoogleSub(googleSub);
+    }
+
     public User getById(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.RESOURCE_NOT_FOUND, "존재하지 않는 회원"));
@@ -36,5 +40,16 @@ public class UserService {
     @Transactional
     public User register(User user) {
         return userRepository.save(user);
+    }
+
+    /**
+     * 회원에게 구글 계정을 연결한다.
+     * 바로 flush해서 google_sub UNIQUE 위반(같은 구글 계정을 동시에 다른 회원에게 연결)을 커밋 시점이 아니라 여기서
+     * {@code DataIntegrityViolationException}으로 알 수 있게 한다. 그래야 호출한 쪽이 409로 바꿔서 응답할 수 있다.
+     */
+    @Transactional
+    public void linkGoogle(User user, String googleSub, String googleEmail) {
+        user.linkGoogle(googleSub, googleEmail);
+        userRepository.saveAndFlush(user);
     }
 }

@@ -64,8 +64,23 @@ public class User extends BaseTimeEntity {
         return new User(email, passwordHash, null, null);
     }
 
+    // 구글로 처음 가입한 회원. 비밀번호 없이 구글 계정(sub)으로만 로그인한다
+    public static User createWithGoogle(String email, String googleSub, String googleEmail) {
+        return new User(email, null, googleSub, googleEmail);
+    }
+
+    // 기존 이메일 계정에 구글 계정을 연결한다. 이후에는 구글 로그인으로도 이 계정에 들어온다
+    public void linkGoogle(String googleSub, String googleEmail) {
+        this.googleSub = googleSub;
+        this.googleEmail = googleEmail;
+    }
+
     // false면 구글로만 가입한 계정이라 이메일·비밀번호 로그인을 할 수 없다
     public boolean hasPassword() {
         return passwordHash != null;
+    }
+
+    public boolean isGoogleLinked() {
+        return googleSub != null;
     }
 }
