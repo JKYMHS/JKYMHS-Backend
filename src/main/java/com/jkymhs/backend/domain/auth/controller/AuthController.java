@@ -1,6 +1,7 @@
 package com.jkymhs.backend.domain.auth.controller;
 
 import com.jkymhs.backend.domain.auth.dto.request.LoginRequest;
+import com.jkymhs.backend.domain.auth.dto.request.PasswordResetRequest;
 import com.jkymhs.backend.domain.auth.dto.request.SignupRequest;
 import com.jkymhs.backend.domain.auth.dto.response.LoginResponse;
 import com.jkymhs.backend.domain.auth.dto.response.ReissueResponse;
@@ -84,6 +85,14 @@ public class AuthController {
         return ResponseEntity.noContent()
                 .header(HttpHeaders.SET_COOKIE, refreshTokenCookieProvider.expire().toString())
                 .build();
+    }
+
+    // 로그인하지 않은 상태에서 부른다 (SecurityConfig의 /api/auth/** permitAll). 이메일 인증으로 받은 verificationToken이 본인 확인이다
+    // 새 비밀번호가 규칙에 맞지 않으면(400) 서비스까지 오지 않아서 토큰이 폐기되지 않는다. 비밀번호만 고쳐서 다시 보내면 된다
+    @PostMapping("/password/reset")
+    public ResponseEntity<Void> resetPassword(@Valid @RequestBody PasswordResetRequest request) {
+        authService.resetPassword(request);
+        return ResponseEntity.noContent().build();
     }
 
     // String으로 받으면 스프링이 값을 URL 디코딩하는데, 쿠키에 %ZZ처럼 잘못된 값이 오면 디코딩 예외로 500이 된다.

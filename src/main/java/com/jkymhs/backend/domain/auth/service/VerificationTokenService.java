@@ -51,7 +51,15 @@ public class VerificationTokenService {
     public void consume(VerificationPurpose purpose, String email, String token) {
         Long deleted = redisTemplate.execute(CONSUME_SCRIPT, List.of(AuthRedisKeys.emailVerified(purpose, email)), token);
         if (deleted == null || deleted == 0) {
-            throw new CustomException(ErrorCode.EMAIL_NOT_VERIFIED, "verificationToken 없음·만료·이메일 불일치");
+            throw notVerified();
         }
+    }
+
+    /**
+     * 토큰 없음·만료·이메일 불일치의 401. 비밀번호 재설정은 가입하지 않은 이메일에도 이 예외를 그대로 써서,
+     * 응답(description 포함)이 글자 하나까지 같게 한다. 응답이 다르면 그 차이로 가입 여부를 알 수 있다.
+     */
+    public static CustomException notVerified() {
+        return new CustomException(ErrorCode.EMAIL_NOT_VERIFIED, "verificationToken 없음·만료·이메일 불일치");
     }
 }
