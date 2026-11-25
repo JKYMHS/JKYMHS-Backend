@@ -35,9 +35,6 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * 마이페이지 API. 모두 로그인이 필요해서(SecurityConfig의 anyRequest().authenticated()) userId는 항상 있다.
- */
 @RestController
 @RequestMapping("/api/members/me")
 @RequiredArgsConstructor
@@ -108,7 +105,6 @@ public class MemberController {
         return ResponseEntity.noContent().build();
     }
 
-    // 모든 기기의 로그인이 끊기므로 이 기기에 새 액세스 토큰(본문)과 리프레시 토큰(쿠키)을 준다
     @PatchMapping("/password")
     public ResponseEntity<PasswordChangeResponse> changePassword(
             @AuthenticationPrincipal Long userId,
@@ -136,7 +132,6 @@ public class MemberController {
         return ResponseEntity.ok(WithdrawSummaryResponse.from(withdrawSummaryService.summarize(userId)));
     }
 
-    // DELETE에 본문을 싣는다. 본문이 없어도(required = false) 본인 확인 실패 401로 응답한다
     @DeleteMapping
     public ResponseEntity<Void> withdraw(
             @AuthenticationPrincipal Long userId,

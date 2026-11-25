@@ -16,16 +16,12 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/**
- * 추천 요청에서 고른 시·군·구. 없으면 시·도 전체다.
- */
 @Getter
 @Entity
 @Table(name = "recommendation_request_regions", uniqueConstraints = @UniqueConstraint(
         name = "uk_recommendation_request_regions_request_id_region_id", columnNames = {"request_id", "region_id"}))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RecommendationRequestRegion {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

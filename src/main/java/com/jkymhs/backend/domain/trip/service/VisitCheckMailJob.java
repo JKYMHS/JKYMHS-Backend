@@ -21,19 +21,10 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/**
- * 매일 10:00(KST) 끝난 여행의 방문 확인 메일을 보낸다 (§5 Q17).
- *
- * 대상: 끝난 지 7일 안의 여행, 메일을 보낸 적 없음, 방문 확인 대상(배너 조건과 같다), 행동 데이터·이메일 알림 둘 다 동의.
- * 여행마다 "보냄" 표시를 따로 커밋한다. 중간에 SMTP가 실패해도 이미 보낸 여행에 다음 날 또 보내지 않게 하기 위해서다.
- * 메일 발송(외부 SMTP)은 트랜잭션 밖에서 한다 (DB 연결을 쥔 채 SMTP 응답을 기다리지 않게).
- * 실행 기록은 batch_job_logs에 VISIT_CHECK_MAIL로 남는다.
- */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class VisitCheckMailJob {
-
     private final TripRepository tripRepository;
     private final VisitCheckService visitCheckService;
     private final UserConsentService userConsentService;

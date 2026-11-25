@@ -17,10 +17,6 @@ import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 
-/**
- * 배치 실행 기록 한 건. 배치가 언제 돌았고 몇 건을 처리했는지, TourAPI를 몇 번 불렀는지 DB에서 바로 볼 수 있게 남긴다.
- * (job_name, started_at) 인덱스는 "이 배치의 최근 실행" 조회용이다.
- */
 @Getter
 @Entity
 @Table(name = "batch_job_logs", indexes = @Index(name = "idx_batch_job_logs_job_name_started_at",

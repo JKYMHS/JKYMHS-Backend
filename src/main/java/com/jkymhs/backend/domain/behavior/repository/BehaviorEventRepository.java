@@ -11,7 +11,6 @@ import java.util.List;
 
 public interface BehaviorEventRepository extends JpaRepository<BehaviorEvent, Long> {
 
-    // idx_behavior_events_user_id_occurred_at을 탄다
     List<BehaviorEvent> findAllByUserIdAndOccurredAtGreaterThanEqual(Long userId, LocalDateTime since);
 
     List<BehaviorEvent> findAllByUserIdAndCompanionAndOccurredAtGreaterThanEqual(Long userId, String companion,

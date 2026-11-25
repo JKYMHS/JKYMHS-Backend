@@ -15,17 +15,12 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/**
- * "꼭 포함할 장소" (최대 5개, 고른 순서대로). content_id는 FK를 걸지 않는다: 콘텐츠는 지우지 않고 삭제 표시만 하지만,
- * 추천 기록이 콘텐츠 적재(upsert) 순서에 묶이지 않게 값으로만 둔다.
- */
 @Getter
 @Entity
 @Table(name = "recommendation_required_places", uniqueConstraints = @UniqueConstraint(
         name = "uk_recommendation_required_places_request_id_content_id", columnNames = {"request_id", "content_id"}))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RecommendationRequiredPlace {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

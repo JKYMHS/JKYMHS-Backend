@@ -12,15 +12,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * 경로 계산 API. 외부 API(ODsay, 카카오모빌리티) 키를 FE에 두지 않으려고 서버가 대신 부른다.
- * 외부 API가 모두 실패해도 502를 주지 않고 어림값(isEstimated: true)으로 답한다.
- */
 @RestController
 @RequestMapping("/api/routes")
 @RequiredArgsConstructor
 public class RouteController {
-
     private final RouteService routeService;
 
     @PostMapping

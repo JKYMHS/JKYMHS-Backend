@@ -19,16 +19,12 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-/**
- * 끝난 여행의 장소 하나에 대한 방문 확인 (갔는지, 만족도). 일정 항목 하나에 하나만 있다 (UK plan_item_id).
- */
 @Getter
 @Entity
 @Table(name = "visit_reviews", uniqueConstraints = @UniqueConstraint(
         name = "uk_visit_reviews_plan_item_id", columnNames = "plan_item_id"))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class VisitReview extends BaseTimeEntity {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -54,7 +50,6 @@ public class VisitReview extends BaseTimeEntity {
     @Column(nullable = false)
     private boolean visited;
 
-    // 1~5. 가지 않았으면 null
     @JdbcTypeCode(SqlTypes.TINYINT)
     private Integer rating;
 

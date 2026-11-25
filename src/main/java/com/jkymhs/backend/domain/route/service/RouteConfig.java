@@ -15,14 +15,9 @@ import org.springframework.web.client.RestClient;
 import java.net.http.HttpClient;
 import java.time.Duration;
 
-/**
- * 경로 계산용 외부 클라이언트(ODsay, 카카오모빌리티)와 두 API를 동시에 부르는 실행기.
- * 사용자가 화면에서 기다리는 요청이라 타임아웃을 3초로 짧게 둔다 (넘으면 직선거리 어림값으로 답한다).
- */
 @Configuration
 @EnableConfigurationProperties({RouteProperties.class, OdsayProperties.class, KakaoMobilityProperties.class})
 public class RouteConfig {
-
     @Bean
     public OdsayClient odsayClient(OdsayProperties properties) {
         return new OdsayClient(builder(properties.timeout()), properties);

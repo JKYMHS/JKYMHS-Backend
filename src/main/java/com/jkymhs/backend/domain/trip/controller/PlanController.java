@@ -25,17 +25,12 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * 일정안 API. 일정안이 그 여행 것이 아니면 404.
- */
 @RestController
 @RequestMapping("/api/trips/{tripId}/plans")
 @RequiredArgsConstructor
 public class PlanController {
-
     private final PlanService planService;
 
-    // 본문 없이 보내도 된다 (이름 기본값 "직접 만든 일정안 {n}")
     @PostMapping
     public ResponseEntity<IdResponse> create(@AuthenticationPrincipal Long userId, @PathVariable Long tripId,
                                              @Valid @RequestBody(required = false) PlanCreateRequest request) {

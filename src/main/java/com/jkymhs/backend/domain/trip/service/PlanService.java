@@ -47,21 +47,10 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/**
- * 일정안 추가·복제·이름 변경·삭제·확정, 상세 조회, 전체 저장, 장소 담기.
- *
- * 쓰기는 모두 여행 행을 먼저 잠그고(PESSIMISTIC_WRITE) 시작한다. 같은 여행의 일정안 수·확정안·장소 목록을
- * 두 요청이 동시에 바꾸면 "일정안 11개", "확정안이 지워진 일정안" 같은 상태가 생길 수 있어서, 여행 단위로 한 줄로 세운다.
- * 잠그는 순서를 항상 여행 → 일정안으로 맞춰서 교착(deadlock)을 피한다.
- *
- * 외부 API(경로 계산)는 이 서비스의 트랜잭션 안에서 부르지 않는다. 잠금을 쥔 채 외부 응답을 기다리면 같은 여행의 다른 요청이 모두 밀린다.
- * 이동 정보는 FE가 미리 부른 경로 계산 결과(Redis 캐시)나 직선거리 어림값으로 채운다 (§5 Q12).
- */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class PlanService {
-
     static final String DEFAULT_PLAN_NAME = "기본 코스";
     static final String COPY_SUFFIX = " 복사본";
     private static final String MANUAL_PLAN_NAME = "직접 만든 일정안 %d";
@@ -82,8 +71,6 @@ public class PlanService {
     private final TripProperties tripProperties;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
-
-    // ---------- 조회 ----------
 
     public PlanDetailResponse getDetail(Long userId, Long tripId, Long planId) {
         Trip trip = tripAccess.ownedTrip(userId, tripId);
@@ -125,8 +112,6 @@ public class PlanService {
                 item.lng(), item.getStartTime(), item.getEndTime(), item.getStayMinutes(), item.getMemo(),
                 item.getAiReason(), item.isRequired(), deleted, move, warnings, CalendarState.of(item));
     }
-
-    // ---------- 일정안 추가·복제·이름·삭제·확정 ----------
 
     @Transactional
     public Long create(Long userId, Long tripId, String name) {
@@ -171,7 +156,6 @@ public class PlanService {
         }
         visitReviewRepository.deleteAllByPlanIdIn(List.of(planId));
         planItemRepository.deleteAllByPlanIdIn(List.of(planId));
-        // 방금 불러온 항목 엔티티들이 이 일정안을 가리키고 있어서 remove 대신 DELETE 문으로 지운다 (TripRepository.deleteByIdInBulk 참고)
         planRepository.deleteByIdInBulk(plan.getId());
     }
 
@@ -183,9 +167,6 @@ public class PlanService {
         return trip.getConfirmedPlanId();
     }
 
-    /**
-     * 확정 일정안을 바꾼다. 예전 확정안의 캘린더 일정(지워야 할 것)을 이벤트에 담아 바꾸기 전에 알린다.
-     */
     void switchConfirmed(Long userId, Trip trip, Long newPlanId) {
         Long oldPlanId = trip.getConfirmedPlanId();
         if (Objects.equals(oldPlanId, newPlanId)) {
@@ -198,7 +179,6 @@ public class PlanService {
         trip.increaseVersion();
     }
 
-    /** @return 지금 일정안 수 */
     long ensurePlanCapacity(Trip trip) {
         long count = planRepository.countByTripId(trip.getId());
         if (count >= tripProperties.maxPlans()) {
@@ -208,13 +188,6 @@ public class PlanService {
         return count;
     }
 
-    // ---------- 전체 저장 ----------
-
-    /**
-     * 화면의 장소 목록으로 일정안을 통째로 바꾼다.
-     * 1) 여행 → 일정안 잠금, 버전 비교  2) 검증  3) itemId로 비교해서 수정·추가·삭제 (남은 항목은 id 유지 = 캘린더 eventId 유지)
-     * 4) 날짜별 순서 1..n  5) 앞 장소가 바뀐 항목만 이동 다시 계산  6) 이동 시간 합계·버전 +1  7) 이벤트
-     */
     @Transactional
     public PlanDetailResponse save(Long userId, Long tripId, Long planId, PlanSaveRequest request) {
         Trip trip = tripAccess.ownedTripForUpdate(userId, tripId);
@@ -253,8 +226,8 @@ public class PlanService {
             }
         }
 
-        // 빠진 항목: 캘린더 일정 정리를 먼저 알리고(행이 지워지면 event id를 읽을 수 없다), 방문 확인 → 항목 순으로 지운다 (FK)
         List<PlanItem> removed = existing.stream().filter(item -> !keptIds.contains(item.getId())).toList();
+        // 캘린더 정리 알림 → 방문 확인 → 항목 순으로 지운다 (FK)
         publishOrphaned(userId, trip.getId(), removed);
         if (!removed.isEmpty()) {
             List<Long> removedIds = removed.stream().map(PlanItem::getId).toList();
@@ -304,8 +277,6 @@ public class PlanService {
         return detail(trip, plan);
     }
 
-    // 날짜별로 보낸 순서(sortOrder, 같으면 요청 순서)대로 1..n을 다시 매긴다.
-    // record는 값이 같으면 equals가 같아서(같은 장소를 같은 순서로 두 번 보낸 경우) 객체 자체로 구분하는 IdentityHashMap을 쓴다
     private static Map<PlanSaveRequest.Item, Integer> renumber(List<PlanSaveRequest.Item> items) {
         Map<PlanSaveRequest.Item, Integer> index = new IdentityHashMap<>();
         for (int i = 0; i < items.size(); i++) {
@@ -323,8 +294,6 @@ public class PlanService {
         });
         return orders;
     }
-
-    // ---------- 장소 담기 ----------
 
     @Transactional
     public ItemAddResponse addItem(Long userId, Long tripId, Long planId, ItemAddRequest request) {
@@ -368,13 +337,6 @@ public class PlanService {
                 PlanWarning.isOutOfFestival(content, trip.dateOf(day)));
     }
 
-    // ---------- 다른 도메인(AI 추천)이 넘긴 초안으로 일정안 만들기 ----------
-
-    /**
-     * 여행 행을 잠근 트랜잭션 안에서 부른다. 일정안 수 확인은 부르는 쪽이 한다.
-     *
-     * @throws CustomException 422 PLAN_EXCEEDS_TRIP_PERIOD — 초안의 마지막 날이 여행 일수보다 크다
-     */
     Plan createFromDraft(Long userId, Trip trip, PlanDraft draft) {
         List<PlanItemDraft> drafts = draft.items() == null ? List.of() : draft.items();
         if (drafts.size() > tripProperties.maxItems()) {
@@ -424,12 +386,6 @@ public class PlanService {
         return plan;
     }
 
-    // ---------- 공통 ----------
-
-    /**
-     * 항목마다 들어오는 이동을 정한다. 구간이 저장 전과 같으면 저장된 이동을 그대로 두고,
-     * 바뀐 항목만 캐시 → 어림값으로 다시 채운다 (외부 API는 부르지 않는다).
-     */
     private void assignMoves(Trip trip, List<PlanItem> ordered, Map<Long, Segment> oldSegments,
                              Map<PlanItem, RouteResult> provided) {
         Map<PlanItem, Segment> segments = PlanMoves.segments(ordered, trip.origin());
@@ -472,7 +428,6 @@ public class PlanService {
                 ITEMS_LIMIT_MESSAGE.formatted(tripProperties.maxItems()), description);
     }
 
-    /** "{이름} 복사본"이 최대 길이를 넘으면 이름 쪽을 잘라서 " 복사본"은 남긴다 */
     static String withSuffix(String name, String suffix, int maxLength) {
         String full = name + suffix;
         if (full.length() <= maxLength) {

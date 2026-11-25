@@ -7,12 +7,8 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Component;
 
-/**
- * 방문 확인 메일 내용을 만들어 보낸다. 인증 메일(VerificationMailSender)과 같은 JavaMailSender·보낸 사람 주소를 쓴다.
- */
 @Component
 public class VisitCheckMailSender {
-
     static final String SUBJECT = "[어디 갈래] %s, 다녀오셨나요?";
 
     private final JavaMailSender mailSender;

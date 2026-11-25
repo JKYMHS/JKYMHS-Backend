@@ -36,12 +36,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
 
-/**
- * AI 코스 추천 요청 한 건. 결과(코스 3개)는 Redis에 24시간만 두고, 이 행은 하루 횟수 계산과 조건 기록에 쓴다.
- *
- * requested_at을 created_at과 따로 두는 이유: created_at은 JPA Auditing이 시스템 시계로 채워서 테스트의 고정 시계(Clock)를
- * 따르지 않는다. 중복 요청 판정(10초)·만료(24시간)·정리 배치가 모두 이 시각을 기준으로 하므로 Clock으로 직접 넣는다.
- */
 @Getter
 @Entity
 @Table(name = "recommendation_requests", indexes = {
@@ -50,7 +44,6 @@ import java.util.stream.Collectors;
 })
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class RecommendationRequest extends BaseTimeEntity {
-
     public static final int EXCLUDED_IDS_MAX_LENGTH = 1000;
 
     @Id
@@ -60,7 +53,6 @@ public class RecommendationRequest extends BaseTimeEntity {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
-    // FK 제약만 만들려고 두는 연관관계 (값은 userId로 읽는다)
     @Getter(AccessLevel.NONE)
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", insertable = false, updatable = false,
@@ -82,14 +74,13 @@ public class RecommendationRequest extends BaseTimeEntity {
     @Column(nullable = false)
     private LocalDate endDate;
 
-    // 첫째 날 시작 시각
     @Column(nullable = false)
     private LocalTime startTime;
 
     @Column(nullable = false, length = 100)
     private String originName;
 
-    // 출발지 주소·좌표는 현재 위치일 수 있어서 24시간 뒤 정리 배치가 지운다 (§5 Q11)
+    // 현재 위치일 수 있어 24시간 뒤 배치가 지움
     private String originAddress;
 
     @Column(precision = 10, scale = 7)
@@ -111,13 +102,10 @@ public class RecommendationRequest extends BaseTimeEntity {
     @Column(nullable = false)
     private boolean indoorPreferred;
 
-    // 저장할 때 기본으로 고를 여행 (FE "+ 일정안 추가 → AI"). FK 없음: 여행이 지워져도 추천 기록은 남는다
     private Long targetTripId;
 
-    // 다시 추천이면 직전 요청 id. FK 없음
     private Long previousRequestId;
 
-    // 다시 추천에서 빼달라고 한 콘텐츠 id들 (쉼표로 이은 문자열)
     @Column(length = EXCLUDED_IDS_MAX_LENGTH)
     private String excludedContentIds;
 
@@ -136,7 +124,6 @@ public class RecommendationRequest extends BaseTimeEntity {
     @Column(length = 50)
     private FailureReason failureReason;
 
-    // 하루 횟수를 세는 KST 날짜
     @Column(nullable = false)
     private LocalDate requestDate;
 
@@ -146,7 +133,6 @@ public class RecommendationRequest extends BaseTimeEntity {
     @Column(nullable = false)
     private LocalDateTime expiresAt;
 
-    // 같은 조건인지 비교하는 SHA-256 (FE가 5xx 뒤 한 번 더 보낸 요청을 새 요청으로 세지 않으려고)
     @Column(nullable = false, length = 64)
     private String conditionsKey;
 
@@ -203,7 +189,6 @@ public class RecommendationRequest extends BaseTimeEntity {
                 .map(Long::valueOf).toList();
     }
 
-    // 1000자를 넘으면 앞에서부터 들어가는 만큼만 남긴다 (id 하나가 최대 20자라 50개 이상은 들어간다)
     private static String joinIds(Collection<Long> ids) {
         if (ids == null || ids.isEmpty()) {
             return null;

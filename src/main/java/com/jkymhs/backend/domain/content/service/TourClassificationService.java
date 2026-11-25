@@ -7,9 +7,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
-/**
- * 관광공사 분류 코드(tour_classifications) 적재.
- */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -22,11 +19,6 @@ public class TourClassificationService {
 
     private final JdbcTemplate jdbcTemplate;
 
-    /**
-     * 코드 기준으로 넣거나 이름·실내외를 고친다.
-     *
-     * @return 넣거나 고친 행 수
-     */
     @Transactional
     public int upsertAll(List<ClassificationSource> sources) {
         List<Object[]> rows = sources.stream()

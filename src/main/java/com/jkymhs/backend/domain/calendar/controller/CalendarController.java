@@ -22,14 +22,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * 구글 캘린더 연동 (마이페이지 > 캘린더).
- */
 @RestController
 @RequestMapping("/api/calendar")
 @RequiredArgsConstructor
 public class CalendarController {
-
     private final CalendarLinkService calendarLinkService;
 
     @PostMapping
@@ -54,7 +50,6 @@ public class CalendarController {
         return ResponseEntity.ok(calendarLinkService.changeDefault(userId, request.calendarId()));
     }
 
-    // 202: "모두 지우기"는 삭제 작업이 끝난 뒤에 연동이 지워진다. 진행은 jobId로 본다
     @DeleteMapping
     public ResponseEntity<CalendarDisconnectResponse> disconnect(@AuthenticationPrincipal Long userId,
                                                                  @RequestParam(defaultValue = "false") boolean deleteEvents) {

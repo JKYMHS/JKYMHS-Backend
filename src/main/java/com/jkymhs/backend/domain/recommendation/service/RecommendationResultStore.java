@@ -17,35 +17,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-/**
- * 추천 결과·진행 상황의 Redis 읽기/쓰기.
- *
- * 결과는 "꼭 남아야 하는 값"이라 Redis 오류를 숨기지 않는다: 쓰기 실패 → 작업이 FAILED(INTERNAL), 읽기 실패 → 503 (G12).
- * 진행 상황은 화면 표시용이라 실패해도 무시한다.
- */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class RecommendationResultStore {
-
     static final Duration PROGRESS_TTL = Duration.ofHours(1);
 
     private final StringRedisTemplate redisTemplate;
     private final JsonMapper jsonMapper;
     private final RecommendationProperties properties;
 
-    /**
-     * @throws DataAccessException Redis 쓰기 실패
-     */
     public void saveResult(Long requestId, RecommendationResult result) {
         redisTemplate.opsForValue().set(RecommendationRedisKeys.result(requestId), jsonMapper.writeValueAsString(result),
                 properties.resultTtl());
     }
 
-    /**
-     * @return 없거나(만료) 형식이 깨졌으면 빈 값
-     * @throws DataAccessException Redis 읽기 실패 (전역 처리기가 503으로 바꾼다)
-     */
     public Optional<RecommendationResult> findResult(Long requestId) {
         String json = redisTemplate.opsForValue().get(RecommendationRedisKeys.result(requestId));
         if (json == null) {
@@ -59,7 +45,6 @@ public class RecommendationResultStore {
         }
     }
 
-    /** 이전 결과를 참고만 할 때 (다시 추천의 감점). Redis 오류도 빈 값으로 본다 */
     public Optional<RecommendationResult> findResultQuietly(Long requestId) {
         try {
             return findResult(requestId);
@@ -85,7 +70,6 @@ public class RecommendationResultStore {
         }
     }
 
-    /** 진행 상황이 없으면(아직 시작 전, Redis 오류) 빈 값 */
     public Optional<Progress> findProgress(Long requestId) {
         try {
             Map<Object, Object> hash = redisTemplate.opsForHash().entries(RecommendationRedisKeys.progress(requestId));
@@ -112,7 +96,6 @@ public class RecommendationResultStore {
         try {
             redisTemplate.delete(keys);
         } catch (DataAccessException e) {
-            // 남은 키는 TTL(최대 24시간)이 지나면 사라진다
             log.warn("추천 Redis 키 삭제 실패 (TTL로 사라짐): {}", e.getMessage());
         }
     }

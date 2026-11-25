@@ -39,17 +39,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/**
- * 찜 추가·삭제·목록.
- *
- * 추가·삭제는 멱등이다. 하트를 두 번 눌러도(네트워크 재시도 포함) 결과와 찜 수가 같다.
- * 실제로 행이 생기거나 지워졌을 때만 contents.wish_count를 ±1 한다 (ContentService.adjustWishCount, 원자적 UPDATE).
- */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class WishService {
-
     static final String UNKNOWN_CONTENT_MESSAGE = "존재하지 않는 장소입니다.";
     private static final int DEFAULT_SIZE = 20;
     private static final String KEY_TAB = "t";
@@ -63,11 +56,6 @@ public class WishService {
     private final ExploreProperties exploreProperties;
     private final Clock clock;
 
-    /**
-     * 새로 찜했을 때만 찜 수를 올리고 WISH 행동 이벤트를 발행한다 (커밋 뒤 행동 데이터 도메인이 받는다).
-     *
-     * @throws CustomException 404 "존재하지 않거나 삭제된 장소입니다." — 없는 콘텐츠, 삭제된 콘텐츠
-     */
     @Transactional
     public WishToggleResponse add(Long userId, Long contentId) {
         ContentSnapshot content = contentService.getActiveSnapshot(contentId);
@@ -78,15 +66,9 @@ public class WishService {
         }
         contentService.adjustWishCount(contentId, 1);
         eventPublisher.publishEvent(new BehaviorSignalEvent(userId, contentId, BehaviorSignalType.WISH, null, null, now));
-        // 방금 +1 한 값. 같은 순간 다른 회원의 찜까지 반영한 정확한 값은 다음 조회 때 보인다
         return new WishToggleResponse(contentId, true, content.wishCount() + 1);
     }
 
-    /**
-     * 삭제된 콘텐츠도 찜 해제할 수 있다 (찜 목록의 "삭제된 장소" 카드에서 지우기).
-     *
-     * @throws CustomException 404 "존재하지 않는 장소입니다." — contents에 아예 없는 id
-     */
     @Transactional
     public WishToggleResponse remove(Long userId, Long contentId) {
         ContentSnapshot content = contentService.findSnapshots(List.of(contentId)).get(contentId);
@@ -101,17 +83,6 @@ public class WishService {
         return new WishToggleResponse(contentId, false, Math.max(content.wishCount() - 1, 0));
     }
 
-    /**
-     * 찜한 순서(최근 먼저)의 목록. 삭제된 콘텐츠도 deleted=true로 넣는다.
-     *
-     * 탭·숨기기 조건은 콘텐츠 정보(종류·축제 기간·운영 시간)로 판단해야 하는데, 찜 도메인은 contents 테이블을 직접 읽지 않는다
-     * (ContentService만 쓴다). 그래서 그 회원의 찜을 모두 읽고, 콘텐츠 정보를 한 번에 받아 메모리에서 거르고 자른다.
-     * 한 회원의 찜은 많아야 수백 개라 이 방식이 충분하다. 수천 개를 넘는 회원이 생기면 contents와 JOIN하는 조회로 바꾼다.
-     *
-     * 커서는 {t: 탭, w: 찜한 시각, i: 찜 id}. 찜한 시각이 같으면 id가 큰(나중) 것이 먼저다.
-     *
-     * @throws CustomException 400 INVALID_CURSOR — 깨진 커서, 다른 탭의 커서
-     */
     public WishListResponse getList(Long userId, WishListRequest request) {
         CategoryTab tab = request.tab();
         int size = request.size() == null ? DEFAULT_SIZE : request.size();
@@ -154,28 +125,21 @@ public class WishService {
         return new WishListResponse(items, page.nextCursor(), page.hasNext(), counts);
     }
 
-    /** 탐색 응답의 liked 채우기 (ContentPersonalizationImpl이 쓴다) */
     public Set<Long> findWishedContentIds(Long userId, Collection<Long> contentIds) {
         return wishRepository.findContentIds(userId, contentIds);
     }
 
-    /** 탈퇴 안내의 "찜 N개" */
     public long countByUser(Long userId) {
         return wishRepository.countByUserId(userId);
     }
 
-    /** 인기 점수 배치 입력: since(포함) 이후 새로 생긴 찜 수. 지금 남아 있는 찜만 센다 (찜했다 바로 지우면 빠진다) */
     public Map<Long, Long> countCreatedSince(LocalDateTime since) {
         return wishRepository.countByContentSince(since).stream()
                 .collect(Collectors.toMap(ContentWishCount::contentId, ContentWishCount::count));
     }
 
-    /**
-     * 탈퇴 직전 (UserWithdrawnEvent, 같은 트랜잭션): 찜했던 콘텐츠의 찜 수를 하나씩 내리고 찜을 모두 지운다.
-     */
     @Transactional
     public void deleteAllOf(Long userId) {
-        // (user_id, content_id) 유니크 키가 있어서 찜 하나 = 콘텐츠 하나다
         wishRepository.findAllByUserIdOrderByCreatedAtDescIdDesc(userId)
                 .forEach(wish -> contentService.adjustWishCount(wish.getContentId(), -1));
         wishRepository.deleteAllByUserId(userId);
@@ -217,9 +181,7 @@ public class WishService {
     private record Row(Wish wish, ContentSnapshot content) {
     }
 
-    /** 이전 페이지의 마지막 찜. 목록은 (찜한 시각 desc, id desc) 순이다 */
     private record Cursor(LocalDateTime wishedAt, long id) {
-
         boolean isBefore(Wish wish) {
             int byTime = wish.getCreatedAt().compareTo(wishedAt);
             return byTime < 0 || (byTime == 0 && wish.getId() < id);

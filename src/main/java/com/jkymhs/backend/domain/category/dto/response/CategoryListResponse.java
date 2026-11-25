@@ -13,9 +13,6 @@ public record CategoryListResponse(List<Item> categories) {
                 .toList());
     }
 
-    /**
-     * @param tab 이 카테고리가 나오는 탐색 탭 ("place", "festival")
-     */
     public record Item(Long id, String code, String name, CategoryTab tab) {
     }
 }

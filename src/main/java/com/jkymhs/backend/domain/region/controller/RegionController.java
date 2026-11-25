@@ -16,7 +16,6 @@ import java.time.Duration;
 @RequiredArgsConstructor
 public class RegionController {
 
-    // 지역 목록은 하루에 한 번(동기화 배치) 정도만 바뀐다. 브라우저가 하루 동안 다시 묻지 않게 한다
     private static final CacheControl CACHE_ONE_DAY = CacheControl.maxAge(Duration.ofDays(1));
 
     private final RegionListService regionListService;

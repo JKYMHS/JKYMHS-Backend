@@ -12,10 +12,6 @@ import java.util.List;
 
 public interface ContentViewRepository extends JpaRepository<ContentView, Long> {
 
-    /**
-     * 오늘 처음 본 것이면 1, 이미 본 날이면 0 (유니크 키에 걸려 무시된다).
-     * "있는지 보고 없으면 저장"을 두 번에 나눠 하면 동시에 두 번 열었을 때 둘 다 저장하려다 한쪽이 실패한다.
-     */
     @Modifying
     @Query(value = "INSERT IGNORE INTO content_views (user_id, content_id, view_date, created_at) "
             + "VALUES (:userId, :contentId, :viewDate, :now)", nativeQuery = true)

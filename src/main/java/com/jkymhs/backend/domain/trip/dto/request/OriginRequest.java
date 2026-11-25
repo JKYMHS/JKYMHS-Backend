@@ -7,9 +7,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
-/**
- * 출발지 (출발지 검색 API 결과를 그대로 보낸다).
- */
 public record OriginRequest(
         @NotBlank(message = "출발지 이름을 입력해주세요.")
         @Size(max = 100, message = "출발지 이름은 100자까지 입력할 수 있습니다.") String name,
@@ -21,7 +18,6 @@ public record OriginRequest(
         @DecimalMin(value = "-180", message = "경도가 올바르지 않습니다.")
         @DecimalMax(value = "180", message = "경도가 올바르지 않습니다.") Double lng
 ) {
-
     public TripOrigin toOrigin() {
         return new TripOrigin(name.trim(), address, lat, lng);
     }

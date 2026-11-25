@@ -14,13 +14,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * 카카오 로컬 API (키워드 검색, 주소 검색, 좌표 → 주소).
- * 출발지(역·공항·집 주소)는 TourAPI 데이터에 없어서 카카오에서 찾는다. 키를 FE에 두지 않으려고 서버가 대신 부른다.
- *
- * 응답은 {@code {"documents": [...], "meta": {...}}} 형식이다. 좌표는 x = 경도, y = 위도 문자열로 온다.
- * RestClient.Builder를 생성자로 받는 이유는 TourApiClient와 같다 (테스트에서 MockRestServiceServer를 붙인다).
- */
 public class KakaoLocalClient {
 
     private final RestClient restClient;
@@ -32,7 +25,6 @@ public class KakaoLocalClient {
         this.properties = properties;
     }
 
-    /** 장소 이름 검색 ("용산역"). 정확도순 */
     public List<KakaoPlace> searchKeyword(String query, int size) {
         JsonNode root = get(uri("/v2/local/search/keyword.json").queryParam("query", query).queryParam("size", size));
         List<KakaoPlace> places = new ArrayList<>();
@@ -48,7 +40,6 @@ public class KakaoLocalClient {
         return places;
     }
 
-    /** 주소 검색 ("한강대로 405"). 주소 자체가 결과라 이름도 주소로 채운다 */
     public List<KakaoPlace> searchAddress(String query) {
         JsonNode root = get(uri("/v2/local/search/address.json").queryParam("query", query));
         List<KakaoPlace> places = new ArrayList<>();
@@ -66,7 +57,6 @@ public class KakaoLocalClient {
         return places;
     }
 
-    /** 좌표가 가리키는 주소. 바다·해외처럼 주소가 없으면 빈 값 */
     public Optional<KakaoAddress> coordToAddress(double lat, double lng) {
         JsonNode root = get(uri("/v2/local/geo/coord2address.json").queryParam("x", lng).queryParam("y", lat));
         for (JsonNode doc : root.path("documents")) {
@@ -99,7 +89,6 @@ public class KakaoLocalClient {
         } catch (RestClientResponseException e) {
             throw new KakaoLocalException("카카오 로컬 응답 오류: " + e.getStatusCode().value());
         } catch (RestClientException e) {
-            // 예외 메시지에는 요청 주소(좌표 포함)가 들어 있어서 종류만 남긴다
             throw new KakaoLocalException("카카오 로컬 호출 실패: " + e.getClass().getSimpleName());
         }
         if (body == null || body.isBlank()) {

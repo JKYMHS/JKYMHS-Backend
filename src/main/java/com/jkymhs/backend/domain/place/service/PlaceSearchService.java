@@ -17,9 +17,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/**
- * AI 추천·새 여행의 출발지 검색. DB를 쓰지 않아서 트랜잭션이 없다.
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -31,12 +28,6 @@ public class PlaceSearchService {
 
     private final KakaoLocalClient kakaoLocalClient;
 
-    /**
-     * 키워드 검색(장소 이름) 결과를 먼저, 그 뒤에 주소 검색 결과를 붙인다.
-     * "용산역"은 키워드 검색에, "한강대로 405"는 주소 검색에만 나와서 둘 다 부른다. 같은 주소가 이미 있으면 주소 결과는 뺀다.
-     *
-     * @throws CustomException 502 EXTERNAL_API_ERROR "주소 검색에 실패했습니다. 다시 시도해주세요."
-     */
     public PlaceSearchResponse search(String query) {
         List<KakaoPlace> keyword;
         List<KakaoPlace> address;
@@ -70,11 +61,6 @@ public class PlaceSearchService {
         return new PlaceSearchResponse(items);
     }
 
-    /**
-     * 현재 위치 → 주소. 좌표는 카카오에 넘기기만 하고 저장·로그하지 않는다 (PRD: 위치 정보 저장 금지).
-     *
-     * @throws CustomException 502 EXTERNAL_API_ERROR "주소를 찾지 못했습니다. 다시 시도해주세요." (호출 실패 또는 주소 없음)
-     */
     public ReverseGeocodeResponse reverseGeocode(double lat, double lng) {
         KakaoAddress found;
         try {

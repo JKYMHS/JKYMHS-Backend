@@ -15,18 +15,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/**
- * AI 응답을 그대로 믿지 않고 확인한다 (작업 3단계 HOURS). 어긴 규칙을 문장으로 모아서 돌려주면, 작업이 그 목록을
- * {@code violations}로 붙여 AI에 한 번 더 요청한다.
- *
- * 확인하는 것: 코스 수·날짜 모양, 후보에 없는 id, 같은 장소 두 번, 빠진 꼭 포함 장소, 하루 장소 수, 축제 기간,
- * 쉬는 요일, 영업시간(직선거리 어림 이동으로 계산한 임시 시각 기준), 아이와 가면 20:00 넘어 끝나는 장소.
- * 꼭 포함할 장소는 사용자가 고른 곳이라 기간·요일·영업시간 검사에서 뺀다 (요청 때 경고로 이미 알렸다).
- */
 @Component
 @RequiredArgsConstructor
 public class CourseValidator {
-
     static final int MIN_STAY_MINUTES = 30;
     static final int MAX_STAY_MINUTES = 300;
     static final int DEFAULT_STAY_MINUTES = 90;
@@ -46,9 +37,6 @@ public class CourseValidator {
         return violations;
     }
 
-    /**
-     * 응답을 코스 계획으로 바꾼다. 검증을 통과한 응답이나 기본 코스에만 쓰지만, 혹시 섞인 모르는 id·중복은 조용히 뺀다.
-     */
     public List<PlannedCourse> toPlans(AiCourseResponse response, CourseContext context) {
         List<PlannedCourse> plans = new ArrayList<>();
         for (AiCourseResponse.Course course : response.courses().stream().limit(context.courses()).toList()) {
@@ -148,7 +136,6 @@ public class CourseValidator {
         }
     }
 
-    // 직선거리 어림 이동으로 임시 시각을 매기고 영업시간·20:00 규칙을 본다 (실제 경로는 검증을 통과한 뒤에만 부른다)
     private void checkHours(String prefix, int dayNumber, List<Candidate> places, List<Integer> stays, LatLng dayOrigin,
                             CourseContext context, List<String> violations) {
         List<Integer> moves = new ArrayList<>();
@@ -177,7 +164,6 @@ public class CourseValidator {
         ContentSnapshot content = candidate.content();
         LocalTime open = candidate.isFestival() ? content.eventStartTime() : content.openTime();
         LocalTime close = candidate.isFestival() ? content.eventEndTime() : content.closeTime();
-        // 모르는 영업시간과 자정을 넘기는 영업(22:00~02:00)은 보지 않는다
         if (open == null || close == null || !close.isAfter(open)) {
             return;
         }

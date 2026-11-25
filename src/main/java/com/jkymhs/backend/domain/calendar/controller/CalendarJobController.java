@@ -18,14 +18,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * 캘린더 작업: 일괄 업로드 만들기·진행 상태·실패만 다시. 작업은 202로 받고 진행은 polling으로 본다.
- */
 @RestController
 @RequestMapping("/api/calendar/jobs")
 @RequiredArgsConstructor
 public class CalendarJobController {
-
     private final CalendarUploadService calendarUploadService;
     private final CalendarJobService calendarJobService;
 

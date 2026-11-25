@@ -9,14 +9,6 @@ import org.springframework.validation.annotation.Validated;
 
 import java.time.Duration;
 
-/**
- * application.yml {@code behavior.*} (행동 데이터·취향 프로필).
- *
- * @param halfLife            이 기간이 지난 행동은 가중치가 절반이 된다 (30일)
- * @param profileWindow       이 기간보다 오래된 행동은 프로필 계산에서 뺀다 (180일)
- * @param companionMinSignals 동행별 프로필을 쓰려면 필요한 최소 행동 수. 모자라면 공통 프로필을 준다 (10)
- * @param executor            행동 기록 전용 스레드 풀 크기
- */
 @Validated
 @ConfigurationProperties(prefix = "behavior")
 public record BehaviorProperties(

@@ -50,18 +50,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/**
- * tools/tourapi/collect.py가 만든 CSV를 DB에 넣는다. {@code tour-api.import.csv-dir}(TOUR_IMPORT_CSV_DIR)가 있을 때만 서버 시작 시 돈다.
- *
- * 처음 데이터를 API로 전부 받으면 수천 번 호출이 필요해서 개발 계정 하루 한도(1000회)로는 며칠이 걸린다.
- * 그래서 수집기로 한 번 받아둔 CSV를 넣고, 이후 변경분만 매일 동기화 배치({@link TourSyncJob})가 받는다.
- *
- * 순서: 지역(regions.csv) → 분류(lcls_codes.csv + classpath:seed/indoor_outdoor.csv) → 카테고리 시드 →
- * 콘텐츠(contents.csv, 지역 id·카테고리·실내외를 이때 정한다) → 운영 정보(content_details.csv → 운영 시간·쉬는 날·축제 시간 컬럼).
- * 모두 upsert라서 몇 번을 돌려도 결과가 같다. 끝나면 동기화 기준일을 CSV의 가장 최근 수정일로 맞춘다.
- *
- * 실패해도 서버 시작을 막지 않는다 (FAILED 기록 + 알림). 탐색 API는 빈 결과로라도 뜨는 편이 낫다.
- */
 @Slf4j
 @Component
 @Order(2)
@@ -194,7 +182,6 @@ public class TourCsvImporter implements ApplicationRunner {
         return new ParsedContents(sources, unreadable);
     }
 
-    // unreadable: id·종류를 읽지 못해 ContentSource를 만들 수 없었던 줄 수
     private record ParsedContents(List<ContentSource> sources, int unreadable) {
     }
 
@@ -217,7 +204,6 @@ public class TourCsvImporter implements ApplicationRunner {
                 parseDateTime(value(record, "tour_modified_at")));
     }
 
-    /** @return {처리한 줄, contents에 없어서 건너뛴 줄} */
     private int[] importDetails(Path file) {
         if (!Files.exists(file)) {
             log.warn("content_details.csv not found in {}, skipping details", file.getParent());
@@ -234,7 +220,6 @@ public class TourCsvImporter implements ApplicationRunner {
                 skipped++;
                 continue;
             }
-            // collect.py는 운영 시간과 축제 공연 시간을 operating_hours 한 칸에 넣는다. 축제인지는 applyIntro가 종류를 보고 나눈다
             TourIntro intro = new TourIntro(value(record, "operating_hours"), value(record, "rest_date"), null,
                     value(record, "event_start_time"), value(record, "event_place"), value(record, "fee"),
                     value(record, "age_limit"), value(record, "host"), value(record, "contact"), null);
@@ -265,7 +250,6 @@ public class TourCsvImporter implements ApplicationRunner {
                 .get();
     }
 
-    // collect.py는 엑셀에서 한글이 깨지지 않게 UTF-8 BOM(utf-8-sig)으로 쓴다. BOM이 남으면 첫 헤더 이름이 "﻿content_id"가 된다
     private static Reader skipBom(BufferedReader reader) throws IOException {
         reader.mark(1);
         if (reader.read() != '﻿') {
@@ -287,7 +271,6 @@ public class TourCsvImporter implements ApplicationRunner {
             try {
                 return ContentType.valueOf(value);
             } catch (IllegalArgumentException ignored) {
-                // 아래에서 contentTypeId로 정한다
             }
         }
         return ContentType.ofTourTypeId(tourTypeId);

@@ -41,12 +41,6 @@ import java.util.Map;
 import java.util.OptionalLong;
 import java.util.Set;
 
-/**
- * 탐색 목록(GET /api/contents)과 비교 담기 조회(GET /api/contents/lookup).
- *
- * 요청 값 검증 → 조회 조건(ContentSearchCondition) 만들기 → 키셋 페이지 조회 → 카드로 바꾸기 순서다.
- * 조회 조건을 SQL로 바꾸는 일은 {@link ContentSearchRepository}가 한다.
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -59,7 +53,6 @@ public class ContentExploreService {
     private static final Set<FestivalStatus> DEFAULT_FESTIVAL_STATUSES =
             EnumSet.of(FestivalStatus.ONGOING, FestivalStatus.UPCOMING);
 
-    // 커서 JSON 키: t 탭, s 정렬, k 정렬 값 목록, i 마지막 id, v 인기 점수 버전 (짧게 써서 URL을 줄인다)
     private static final String KEY_TAB = "t";
     private static final String KEY_SORT = "s";
     private static final String KEY_VALUES = "k";
@@ -76,9 +69,6 @@ public class ContentExploreService {
     private final ExploreProperties exploreProperties;
     private final Clock clock;
 
-    /**
-     * @throws CustomException 400 INVALID_INPUT (필터 값), 400 INVALID_CURSOR, 409 CURSOR_VERSION_MISMATCH
-     */
     public ContentListResponse getList(ContentListRequest request, Long userId) {
         CategoryTab tab = request.tab();
         LocalDateTime now = LocalDateTime.now(clock);
@@ -103,7 +93,6 @@ public class ContentExploreService {
         Long categoryId = resolveCategory(request.categoryId(), tab);
         Bbox bbox = parseBbox(request.bbox());
 
-        // 인기순 커서에 넣을 인기 점수 버전. 첫 페이지는 지금 버전, 다음 페이지는 받은 커서의 버전을 그대로 이어 쓴다
         Long version = null;
         ListCursor after = null;
         if (request.cursor() != null && !request.cursor().isBlank()) {
@@ -114,7 +103,6 @@ public class ContentExploreService {
                 checkVersion(version);
             }
         } else if (sort == ContentSort.POPULAR) {
-            // Redis를 못 읽으면 0을 넣는다. 다음 페이지에서도 못 읽으면 비교를 건너뛴다 (캐시 장애로 목록이 막히지 않게)
             version = popularityVersion().orElse(0L);
         }
 
@@ -129,9 +117,6 @@ public class ContentExploreService {
         return new ContentListResponse(items, page.nextCursor(), page.hasNext(), counts, today);
     }
 
-    /**
-     * 비교 담기: 보낸 순서를 지키고, 같은 id를 여러 번 보내면 한 번만 준다.
-     */
     public ContentLookupResponse lookup(List<Long> ids, Long userId) {
         List<Long> unique = new ArrayList<>(new LinkedHashSet<>(ids));
         Map<Long, ContentSnapshot> snapshots = contentService.findSnapshots(unique);
@@ -141,8 +126,6 @@ public class ContentExploreService {
                 .toList();
         return new ContentLookupResponse(items, missing);
     }
-
-    // ---------- 조건 ----------
 
     private ContentSearchCondition condition(CategoryTab tab, ContentChip chip, String keyword, RegionRef region,
                                              Long categoryId, List<FestivalStatus> requestedStatuses, Bbox bbox,
@@ -154,7 +137,6 @@ public class ContentExploreService {
             statuses = requestedStatuses == null || requestedStatuses.isEmpty()
                     ? DEFAULT_FESTIVAL_STATUSES : EnumSet.copyOf(requestedStatuses);
             if (chip == ContentChip.ONGOING) {
-                // "지금 진행중" 칩은 상태 필터보다 우선한다
                 statuses = EnumSet.of(FestivalStatus.ONGOING);
             }
         }
@@ -184,9 +166,6 @@ public class ContentExploreService {
                 bbox);
     }
 
-    /**
-     * 이번 주말 [토, 일]. 오늘이 토요일이면 [오늘, 내일], 일요일이면 [오늘]만 (지난 토요일은 이미 지났다).
-     */
     static LocalDate[] comingWeekend(LocalDate today) {
         return switch (today.getDayOfWeek()) {
             case SATURDAY -> new LocalDate[]{today, today.plusDays(1)};
@@ -246,8 +225,6 @@ public class ContentExploreService {
         return new ContentListResponse.TabCounts(festivals, places);
     }
 
-    // ---------- 커서 ----------
-
     private String encodeCursor(CategoryTab tab, ContentSort sort, ListRow row, Long version) {
         Map<String, Object> values = new LinkedHashMap<>();
         values.put(KEY_TAB, tab.code());
@@ -264,10 +241,6 @@ public class ContentExploreService {
         return cursorCodec.encode(values);
     }
 
-    /**
-     * 다른 탭·정렬에서 만든 커서는 400이다 (정렬 값의 뜻이 달라서 이상한 위치부터 보여주게 된다).
-     * 사용자가 커서를 고쳐서 타입이 틀린 경우도 500이 아니라 400 INVALID_CURSOR가 되게 하나씩 확인한다.
-     */
     private static ListCursor readCursor(Map<String, Object> cursor, CategoryTab tab, ContentSort sort) {
         CursorCodec.requireSame(cursor, KEY_TAB, tab.code());
         CursorCodec.requireSame(cursor, KEY_SORT, sort.code());
@@ -300,10 +273,6 @@ public class ContentExploreService {
         };
     }
 
-    /**
-     * 인기 점수 배치(1시간마다)가 점수를 다시 매기면 버전이 오른다. 그 전에 받은 커서로 이어 읽으면
-     * 점수가 바뀐 항목이 빠지거나 두 번 나와서 409로 처음부터 다시 받게 한다.
-     */
     private void checkVersion(long cursorVersion) {
         OptionalLong current = popularityVersion();
         if (current.isPresent() && current.getAsLong() != cursorVersion) {
@@ -312,7 +281,6 @@ public class ContentExploreService {
         }
     }
 
-    /** Redis를 못 읽으면 비어 있다. 값이 없으면 0 (배치가 아직 한 번도 안 돌았다) */
     private OptionalLong popularityVersion() {
         try {
             String value = redisTemplate.opsForValue().get(ContentRedisKeys.popularityVersion());

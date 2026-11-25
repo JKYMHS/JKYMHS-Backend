@@ -4,11 +4,6 @@ import com.jkymhs.backend.domain.category.entity.CategoryGroupType;
 
 import java.util.List;
 
-/**
- * 서비스 카테고리 초기값. FE 탐색 필터·홈 칩과 같은 코드(code)를 쓴다.
- * 분류 코드는 관광공사 신 분류(lclsSystm)이고 어느 단계든 된다 (HS = 역사관광 전체, VE07 = 박물관·전시관 중분류).
- * 음식점(FD)·숙박(AC)은 탐색 필터에 들어가지 않아서 어느 카테고리에도 넣지 않는다.
- */
 final class CategorySeed {
 
     static final List<Item> ITEMS = List.of(

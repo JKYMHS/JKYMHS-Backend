@@ -2,12 +2,7 @@ package com.jkymhs.backend.domain.route.service;
 
 import java.util.List;
 
-/**
- * 구글 encoded polyline 알고리즘 (정밀도 5). 좌표 수백 개를 짧은 문자열 하나로 줄여서 응답·DB 크기를 줄인다.
- * FE 지도 라이브러리가 그대로 풀 수 있는 표준 형식이다.
- */
 public final class PolylineEncoder {
-
     private PolylineEncoder() {
     }
 

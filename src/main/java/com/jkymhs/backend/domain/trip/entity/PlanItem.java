@@ -28,24 +28,12 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Objects;
 
-/**
- * 일정안의 장소 하나 (몇째 날 몇 번째, 시간, 메모, 앞 장소에서 오는 이동).
- *
- * snapshot_* 컬럼: 담을 때의 장소 이름·주소·사진·좌표를 복사해 둔다. TourAPI에서 장소가 내려가도(소프트 삭제) 일정은 그대로 보여야 하고,
- * 일정 화면마다 contents를 다시 읽지 않아도 되게 하기 위해서다.
- *
- * 이동 컬럼(transport_mode …)은 "앞 항목(첫째 날 첫 항목은 출발지)에서 이 항목으로 오는" 이동이다.
- *
- * 캘린더 컬럼(calendar_event_id, calendar_id, sync_status, synced_at)은 캘린더 도메인이 아래 의도 메서드로만 바꾼다.
- * 구글 캘린더 eventId는 이 행의 id로 만들기 때문에, 전체 저장(PUT)에서 남아 있는 항목은 id를 유지한다.
- */
 @Getter
 @Entity
 @Table(name = "plan_items", indexes = @Index(name = "idx_plan_items_plan_id_day_sort",
         columnList = "plan_id, day_number, sort_order"))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PlanItem extends BaseTimeEntity {
-
     public static final int MEMO_MAX_LENGTH = 200;
 
     @Id
@@ -73,11 +61,9 @@ public class PlanItem extends BaseTimeEntity {
     @Column(nullable = false)
     private int dayNumber;
 
-    // 그날 안에서의 순서. 저장할 때마다 1..n으로 다시 매긴다
     @Column(nullable = false)
     private int sortOrder;
 
-    // null이면 캘린더에 종일 일정으로 올린다
     private LocalTime startTime;
 
     private LocalTime endTime;
@@ -104,11 +90,9 @@ public class PlanItem extends BaseTimeEntity {
     @Column(nullable = false, precision = 10, scale = 7)
     private BigDecimal snapshotLng;
 
-    // AI 추천 이유 ("아이와 함께 걷기 좋은 궁궐")
     @Column(length = 500)
     private String aiReason;
 
-    // AI 추천 요청에서 "꼭 갈 곳"으로 고른 장소
     @Column(name = "is_required", nullable = false)
     private boolean required;
 
@@ -160,7 +144,6 @@ public class PlanItem extends BaseTimeEntity {
         return item;
     }
 
-    /** 다른 일정안으로 복사. 캘린더 상태는 비운다 (새 항목이라 캘린더에 올린 적이 없다) */
     public PlanItem copyTo(Long planId) {
         PlanItem copy = new PlanItem(planId, contentId, dayNumber, sortOrder);
         copy.startTime = startTime;
@@ -212,7 +195,6 @@ public class PlanItem extends BaseTimeEntity {
         this.required = required;
     }
 
-    /** 앞 항목에서 오는 이동. null이면 이동 정보를 지운다 (그날 첫 항목) */
     public void changeMove(RouteResult move) {
         if (move == null) {
             this.transportMode = null;
@@ -245,7 +227,6 @@ public class PlanItem extends BaseTimeEntity {
         return travelMinutes == null ? 0 : travelMinutes;
     }
 
-    /** 캘린더 일정에 영향을 주는 값(장소·날짜·순서·시간·메모)이 바뀌었는지 */
     public boolean differsForCalendar(Long contentId, int dayNumber, int sortOrder, LocalTime startTime,
                                       LocalTime endTime, String memo) {
         return !Objects.equals(this.contentId, contentId) || this.dayNumber != dayNumber
@@ -257,9 +238,6 @@ public class PlanItem extends BaseTimeEntity {
         return calendarEventId != null;
     }
 
-    // ---------- 캘린더 (캘린더 도메인이 부른다) ----------
-
-    /** 캘린더에 올린 항목이 바뀌었다. 올린 적 없는 항목은 그대로 둔다 */
     public void markDirty() {
         if (syncStatus == CalendarSyncStatus.SYNCED) {
             this.syncStatus = CalendarSyncStatus.DIRTY;
@@ -281,7 +259,6 @@ public class PlanItem extends BaseTimeEntity {
         this.syncStatus = CalendarSyncStatus.FAILED;
     }
 
-    /** 캘린더에서 일정을 지웠거나 연동을 끊었다 */
     public void clearCalendar() {
         this.calendarId = null;
         this.calendarEventId = null;

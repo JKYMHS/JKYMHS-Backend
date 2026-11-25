@@ -36,13 +36,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/**
- * 콘텐츠 조회·적재. 다른 도메인(탐색, 찜, 여행, AI 추천, 인기 점수)은 contents 관련 테이블을 직접 읽거나 쓰지 않고 이 서비스만 쓴다.
- *
- * 쓰기는 JdbcTemplate로 한다. CSV 3만 건이나 동기화 1000건을 JPA로 한 건씩 저장하면 건마다 SELECT + INSERT/UPDATE가 나간다.
- * {@code INSERT … ON DUPLICATE KEY UPDATE}를 1000건씩 묶어(batchUpdate) 보내면 몇 번의 왕복으로 끝난다.
- * MySQL 8.0.19부터 쓸 수 있는 {@code VALUES (…) AS new} 별칭으로 새 값(new.col)과 기존 값(contents.col)을 구분한다. 함수 안에서는 테이블 이름을 붙여야 모호하지 않다.
- */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -51,11 +44,6 @@ public class ContentService {
     static final String NOT_FOUND_MESSAGE = "존재하지 않거나 삭제된 장소입니다.";
     static final int BATCH_SIZE = 1000;
 
-    /*
-     * 다시 받아도 지우지 않는 값: 인기 점수·찜 수(다른 배치가 관리), 운영 정보(detailIntro2로 따로 받는다), 생성 시각.
-     * 축제 날짜는 동기화 목록(areaBasedSyncList2)에 없을 수 있어서 새 값이 없으면 기존 값을 둔다.
-     * 다시 받았다는 것은 TourAPI에 다시 보인다는 뜻이라 삭제 표시를 푼다.
-     */
     private static final String UPSERT_CONTENT_SQL = """
             INSERT INTO contents (id, content_type, tour_content_type_id, name, address, latitude, longitude,
                 sido_region_id, region_id, lcls1, lcls2, lcls3, category_id, io_type, thumbnail_url, tel,
@@ -84,7 +72,6 @@ public class ContentService {
             WHERE id = ?
             """;
 
-    // 운영 정보에서 온 값만 고친다. 소개글·홈페이지와 fetched_at(상세 갱신 시각)은 그대로 둔다. 새 행이면 fetched_at은 NULL이다
     private static final String UPSERT_INTRO_DETAIL_SQL = """
             INSERT INTO content_details (content_id, fee, contact, host, age_limit, event_program)
             VALUES (?, ?, ?, ?, ?, ?) AS new
@@ -106,11 +93,6 @@ public class ContentService {
     private final NamedParameterJdbcTemplate namedJdbcTemplate;
     private final Clock clock;
 
-    // ---------- 조회 ----------
-
-    /**
-     * @throws CustomException 404 RESOURCE_NOT_FOUND "존재하지 않거나 삭제된 장소입니다."
-     */
     public ContentSnapshot getActiveSnapshot(Long id) {
         Content content = (id == null ? Optional.<Content>empty() : contentRepository.findByIdAndDeletedFalse(id))
                 .orElseThrow(() -> new CustomException(ErrorCode.RESOURCE_NOT_FOUND, NOT_FOUND_MESSAGE,
@@ -118,9 +100,6 @@ public class ContentService {
         return toSnapshots(List.of(content)).getFirst();
     }
 
-    /**
-     * 삭제된 콘텐츠도 넣는다 (deleted=true). 찜·일정 화면이 "삭제된 장소"로 보여줘야 하기 때문이다. 없는 id는 빠진다.
-     */
     public Map<Long, ContentSnapshot> findSnapshots(Collection<Long> ids) {
         if (ids == null || ids.isEmpty()) {
             return Map.of();
@@ -130,11 +109,6 @@ public class ContentService {
                 .collect(Collectors.toMap(ContentSnapshot::id, s -> s, (a, b) -> a, LinkedHashMap::new));
     }
 
-    /**
-     * AI 추천 후보 풀: 관광지 + 기간이 [from, to]와 겹치는 축제, 삭제 안 됨, 인기 점수 높은 순.
-     *
-     * @param regionIds 시·도 id가 섞여 있으면 그 시·도 전체(sido_region_id)로, 시·군·구 id는 region_id로 거른다
-     */
     public List<ContentSnapshot> findCandidatePool(Collection<Long> regionIds, LocalDate from, LocalDate to, int limit) {
         if (regionIds == null || regionIds.isEmpty() || limit <= 0) {
             return List.of();
@@ -146,7 +120,6 @@ public class ContentService {
         return toSnapshots(contents);
     }
 
-    /** 지역 목록 API용 개수: 삭제 안 된 관광지 전부 + 끝나지 않은(진행 중·예정) 축제. */
     public List<RegionContentCount> countActiveByRegion(LocalDate today) {
         return jdbcTemplate.query("""
                         SELECT sido_region_id, region_id, content_type, COUNT(*) AS cnt FROM contents
@@ -168,7 +141,6 @@ public class ContentService {
         return contentRepository.findMaxTourModifiedAt();
     }
 
-    /** 운영 정보를 한 번도 안 받았거나 {@code before}보다 오래된 관광지·축제, 오래된 순. */
     public List<IntroTarget> findIntroTargets(int limit, LocalDateTime before) {
         if (limit <= 0) {
             return List.of();
@@ -179,7 +151,6 @@ public class ContentService {
                 .toList();
     }
 
-    /** 이미 저장된 축제 기간. 동기화 목록(areaBasedSyncList2)에는 축제 기간이 없어서, 이미 있는 축제는 저장된 기간을 그대로 쓴다. */
     public Map<Long, EventPeriod> findFestivalPeriods(Collection<Long> ids) {
         Map<Long, EventPeriod> periods = new HashMap<>();
         if (ids == null || ids.isEmpty()) {
@@ -215,9 +186,6 @@ public class ContentService {
         return types;
     }
 
-    // ---------- 적재 ----------
-
-    /** 콘텐츠 적재 전에 한 번 만든다 (지역·카테고리·실내외 변환표). */
     public ContentLoadContext loadContext() {
         RegionCodeIndex regions = regionService.codeIndex();
         Map<String, IoType> ioTypes = new HashMap<>();
@@ -229,11 +197,6 @@ public class ContentService {
         return new ContentLoadContext(regions, categoryService.matcher(), ioTypes);
     }
 
-    /**
-     * 콘텐츠를 id 기준으로 넣거나 고친다 (1000건씩 묶어서). {@link ContentSource#skipReason()}이 있는 항목은 건너뛴다.
-     *
-     * @return 넣거나 고친 건수 (건너뛴 항목 제외)
-     */
     @Transactional
     public int upsert(List<ContentSource> sources, ContentLoadContext context) {
         LocalDateTime now = LocalDateTime.now(clock);
@@ -261,11 +224,6 @@ public class ContentService {
         return rows.size();
     }
 
-    /**
-     * TourAPI에서 내려간 콘텐츠(showflag=0)를 삭제 표시한다. 행은 지우지 않는다 (찜·일정이 참조한다).
-     *
-     * @return 새로 삭제 표시한 건수
-     */
     @Transactional
     public int markDeleted(Collection<Long> ids) {
         if (ids == null || ids.isEmpty()) {
@@ -281,12 +239,6 @@ public class ContentService {
         return updated;
     }
 
-    /**
-     * 운영 정보 원문을 시각·요일로 바꿔서 contents 컬럼에 넣고, 요금·문의처 등은 content_details에 넣는다.
-     * 축제는 공연 시간(playtime) → event_start_time/event_end_time, 그 밖은 운영 시간(usetime) → open/close/last_entry와 쉬는 요일이다.
-     *
-     * @return 콘텐츠가 없어서 고치지 못했으면 false
-     */
     @Transactional
     public boolean applyIntro(Long contentId, TourIntro intro) {
         ContentType type = findTypes(List.of(contentId)).get(contentId);
@@ -317,12 +269,6 @@ public class ContentService {
         return true;
     }
 
-    /**
-     * 상세 갱신(D1) 결과를 저장한다: 소개글·홈페이지(content_details), 운영 정보, 사진(지우고 다시 넣기), 반려동물 동반 여부.
-     * null로 온 부분(그 호출이 실패함)은 저장된 값을 그대로 둔다.
-     *
-     * @throws CustomException 404 RESOURCE_NOT_FOUND — 콘텐츠 없음
-     */
     @Transactional
     public void applyDetail(Long id, TourDetail detail) {
         if (findTypes(List.of(id)).isEmpty()) {
@@ -350,10 +296,6 @@ public class ContentService {
         }
     }
 
-    /**
-     * 인기 점수 배치(D3) 결과를 한 번에 반영한다. 맵에 없는 콘텐츠는 0점이 된다.
-     * 먼저 0이 아닌 행을 0으로 돌리고, 맵의 점수를 1000건씩 묶어서 쓴다 (한 트랜잭션이라 중간 상태가 조회되지 않는다).
-     */
     @Transactional
     public void updatePopularityScores(Map<Long, Integer> scores) {
         jdbcTemplate.update("UPDATE contents SET popularity_score = 0 WHERE popularity_score <> 0");
@@ -366,15 +308,10 @@ public class ContentService {
         }
     }
 
-    /**
-     * 찜 수를 원자적으로 더하거나 뺀다 (읽고 더해서 쓰면 동시에 찜할 때 하나가 사라진다). 0 아래로는 내려가지 않는다.
-     */
     @Transactional
     public void adjustWishCount(Long id, int delta) {
         jdbcTemplate.update("UPDATE contents SET wish_count = GREATEST(wish_count + ?, 0) WHERE id = ?", delta, id);
     }
-
-    // ---------- 내부 ----------
 
     private List<ContentSnapshot> toSnapshots(List<Content> contents) {
         if (contents.isEmpty()) {
@@ -415,7 +352,6 @@ public class ContentService {
                 c.getPetAllowed(), c.getPopularityScore(), c.getWishCount(), c.isDeleted());
     }
 
-    // JPQL "in ()"를 피하려고 빈 목록 대신 존재할 수 없는 id 하나를 넣는다
     private static Collection<Long> orNone(Collection<Long> ids) {
         return ids.isEmpty() ? List.of(-1L) : ids;
     }
@@ -437,7 +373,6 @@ public class ContentService {
         return value == null || value.isBlank() ? null : value.trim();
     }
 
-    // 컬럼 길이를 넘는 값 하나 때문에 1000건 묶음 전체가 실패하지 않게 자른다
     static String cut(String value, int max) {
         if (value == null) {
             return null;

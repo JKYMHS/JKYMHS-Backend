@@ -7,11 +7,9 @@ import java.util.Collection;
 import java.util.List;
 
 final class CalendarEventRefs {
-
     private CalendarEventRefs() {
     }
 
-    /** 캘린더에 올라간 항목의 (캘린더 id, 일정 id) */
     static List<CalendarEventRef> of(Collection<PlanItem> items) {
         return items.stream()
                 .filter(PlanItem::hasCalendarEvent)

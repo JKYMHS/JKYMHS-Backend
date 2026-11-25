@@ -9,7 +9,6 @@ import java.util.List;
 
 public interface RegionRepository extends JpaRepository<Region, Long> {
 
-    // 부모 이름까지 쓰므로 부모를 같이 읽는다 (지역 수가 300개 미만이라 한 번에 읽어도 가볍다)
     @Query("select r from Region r left join fetch r.parent order by r.depth, r.sortOrder")
     List<Region> findAllWithParent();
 

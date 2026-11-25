@@ -24,14 +24,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * 탐색 공개 API. 토큰이 없어도 되고, 있으면 찜 여부(liked)를 채운다.
- *
- * SecurityConfig가 GET /api/contents/**를 permitAll로 열어 둔다. 토큰이 없거나 만료·위조된 토큰이면 필터가 인증 정보를 채우지 않아서
- * {@code @AuthenticationPrincipal Long userId}가 null이다 (비로그인으로 보고 liked=false, 조회 기록 없음).
- *
- * 경로 /autocomplete, /nearby, /lookup은 /{id}보다 먼저 맞는다 (스프링은 변수 없는 경로를 우선한다).
- */
 @RestController
 @RequestMapping("/api/contents")
 @RequiredArgsConstructor

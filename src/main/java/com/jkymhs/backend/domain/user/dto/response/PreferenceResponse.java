@@ -8,10 +8,6 @@ import com.jkymhs.backend.domain.user.service.PreferenceService.PreferenceView;
 
 import java.util.List;
 
-/**
- * 취향 저장·조회 응답. 온보딩을 끝내지 않았으면(NOT_STARTED·SKIPPED) onboardingStatus 외에는 모두 null이다.
- * pace·timeOfDay는 소문자 코드로 나간다 (CodeEnum).
- */
 public record PreferenceResponse(
         OnboardingStatus onboardingStatus,
         List<String> styleIds,

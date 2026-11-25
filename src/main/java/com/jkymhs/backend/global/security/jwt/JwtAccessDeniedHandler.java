@@ -11,10 +11,6 @@ import org.springframework.web.servlet.ModelAndView;
 
 import java.io.IOException;
 
-/**
- * 로그인은 했지만 권한이 없는 API에 접근했을 때 403을 공통 에러 형식으로 내려준다.
- * 응답을 만드는 방식은 {@link JwtAuthenticationEntryPoint}와 같다.
- */
 public class JwtAccessDeniedHandler implements AccessDeniedHandler {
 
     private final HandlerExceptionResolver handlerExceptionResolver;

@@ -18,23 +18,10 @@ import org.springframework.stereotype.Component;
 
 import java.util.Optional;
 
-/**
- * 작업 하나의 한 차례를 처리한다 (항목 최대 batch-size개, 구글 호출은 하나씩 차례로 — §5 Q7).
- *
- * 1) 액세스 토큰: 리프레시 토큰으로 새로 받는다. invalid_grant → 연동 REVOKED, 남은 항목 AUTH_EXPIRED, 작업 FAILED
- * 2) 항목마다 구글 호출. 결과는 {@link CalendarJobStore}로 바로 기록한다 (중간에 서버가 죽어도 끝난 항목은 다시 하지 않게)
- *    - 429·5xx·응답 없음 → 항목 시도 +1, 작업을 백오프하고 이번 차례를 멈춘다 (최대 3번)
- *    - 403 → NOT_WRITABLE, 그 밖의 4xx → GOOGLE_ERROR로 그 항목만 실패
- * 3) 남은 항목이 있으면 바로 다음 차례로, 없으면 작업을 끝낸다 → 해제·탈퇴 작업이면 토큰 폐기 → 다룬 여행의 남은 DIRTY 항목 다시 맞추기
- *
- * 할 일은 작업 항목의 operation보다 "지금 항목 상태"를 따른다: 일정이 아직 없으면 만들고, 다른 캘린더에 있으면 옮기고, 있으면 고친다.
- * 작업이 기다리는 동안 다른 작업이 먼저 올렸거나 지웠어도 결과가 맞게 하기 위해서다.
- */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class CalendarJobProcessor {
-
     private final CalendarJobStore store;
     private final GoogleCalendarClient googleCalendarClient;
     private final CalendarTokenCipher tokenCipher;
@@ -49,7 +36,6 @@ public class CalendarJobProcessor {
         try {
             processRound(jobId);
         } catch (RuntimeException e) {
-            // 예상 못 한 오류(DB 일시 장애·키 문제 등)로 작업이 RUNNING에 멈추지 않게, 작업 단위로 미루거나 끝낸다
             log.error("캘린더 작업 {} 처리 실패", jobId, e);
             if (store.backoffOrGiveUp(jobId, e.getClass().getSimpleName())) {
                 complete(jobId);
@@ -73,7 +59,6 @@ public class CalendarJobProcessor {
             String encrypted = round.encryptedRefreshToken() != null ? round.encryptedRefreshToken()
                     : store.activeLinkToken(round.userId()).orElse(null);
             if (encrypted == null) {
-                // 작업을 넣은 뒤 연동을 끊었거나 만료됐다
                 store.failPending(jobId, CalendarFailureReason.AUTH_EXPIRED);
                 complete(jobId);
                 return;
@@ -126,7 +111,6 @@ public class CalendarJobProcessor {
             try {
                 googleCalendarClient.deleteEvent(accessToken, jobItem.getCalendarId(), jobItem.getEventId());
             } catch (GoogleApiException e) {
-                // 이미 없는 일정(사용자가 구글에서 지움)은 지운 것으로 본다
                 if (!e.notFound()) {
                     throw e;
                 }
@@ -136,7 +120,6 @@ public class CalendarJobProcessor {
 
         Optional<CalendarItem> current = Optional.ofNullable(jobItem.getPlanItemId()).flatMap(tripCalendarSupport::item);
         if (current.isEmpty()) {
-            // 작업이 기다리는 사이 항목이 지워졌다 (그 일정 삭제는 삭제 작업이 맡는다)
             return new Applied(jobItem.getCalendarId(), jobItem.getEventId(), null, false);
         }
         CalendarItem item = current.get();
@@ -155,7 +138,6 @@ public class CalendarJobProcessor {
                 if (!e.notFound()) {
                     throw e;
                 }
-                // 예전 캘린더에서 사라졌다 → 새 캘린더에 새로 만든다
                 insertOrRevive(accessToken, target, event);
                 return new Applied(target, eventId, item, false);
             }
@@ -171,10 +153,6 @@ public class CalendarJobProcessor {
         return new Applied(target, eventId, item, false);
     }
 
-    /**
-     * 새 일정. 같은 id가 이미 있으면(409) 그 일정을 읽어서, 지워진 일정(cancelled)이면 되살리고 아니면 내용을 고친다.
-     * 구글은 지운 일정의 id를 한동안 cancelled로 붙잡고 있어서, 지웠다가 다시 올리면(확정안을 되돌림 등) 409가 난다.
-     */
     private void insertOrRevive(String accessToken, String calendarId, GoogleEvent event) {
         try {
             googleCalendarClient.insertEvent(accessToken, calendarId, event);

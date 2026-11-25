@@ -32,34 +32,23 @@ public class User extends BaseTimeEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /*
-     * utf8mb4_bin: 대소문자·악센트까지 정확히 같아야 같은 이메일로 본다.
-     * MySQL 기본 collation(utf8mb4_0900_ai_ci)은 "User@x.com", "usér@x.com"을 "user@x.com"과 같은 값으로 찾는데,
-     * Redis 키(login:fail:{email})는 문자열이 다르면 다른 키다. 둘의 기준이 다르면 이메일 철자를 바꿔가며 로그인 잠금을 피할 수 있다.
-     * 그래서 요청에서 이메일을 소문자로 맞추고(DTO), DB는 정확히 비교한다.
-     */
     @Column(nullable = false, columnDefinition = "varchar(255) collate utf8mb4_bin")
     private String email;
 
-    // 구글로만 가입한 회원은 비밀번호가 없다 (null)
     private String passwordHash;
 
-    // 구글 계정 고유 ID (id_token의 sub). 구글을 연결하지 않았으면 null
     private String googleSub;
 
     private String googleEmail;
 
-    // Hibernate는 MySQL에서 enum 필드를 ENUM('DONE',...) 컬럼으로 만든다. 값을 추가하면 기존 DB에 저장이 안 돼서 VARCHAR로 고정한다
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(nullable = false, length = 20)
     private OnboardingStatus onboardingStatus;
 
-    // 마이페이지에서 정하는 표시 이름. 정하지 않았으면 null이고, 화면에는 이메일 앞부분을 보여준다 (displayName)
     @Column(length = 30)
     private String nickname;
 
-    // 마지막으로 AI 추천을 요청할 때 고른 동행. 다음 추천 화면의 기본값으로 쓴다 (FUNC-003-01 "기본값 = 지난번 선택")
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "last_companion_type", length = 20)
@@ -77,18 +66,15 @@ public class User extends BaseTimeEntity {
         return new User(email, passwordHash, null, null);
     }
 
-    // 구글로 처음 가입한 회원. 비밀번호 없이 구글 계정(sub)으로만 로그인한다
     public static User createWithGoogle(String email, String googleSub, String googleEmail) {
         return new User(email, null, googleSub, googleEmail);
     }
 
-    // 기존 이메일 계정에 구글 계정을 연결한다. 이후에는 구글 로그인으로도 이 계정에 들어온다
     public void linkGoogle(String googleSub, String googleEmail) {
         this.googleSub = googleSub;
         this.googleEmail = googleEmail;
     }
 
-    // false면 구글로만 가입한 계정이라 이메일·비밀번호 로그인을 할 수 없다
     public boolean hasPassword() {
         return passwordHash != null;
     }
@@ -97,7 +83,6 @@ public class User extends BaseTimeEntity {
         return googleSub != null;
     }
 
-    // 이름을 정하지 않았으면 이메일의 @ 앞부분을 이름처럼 보여준다
     public String displayName() {
         if (nickname != null) {
             return nickname;
@@ -110,12 +95,10 @@ public class User extends BaseTimeEntity {
         this.nickname = nickname;
     }
 
-    // 취향을 저장하면 온보딩이 끝난 것이다. 건너뛰었던 회원(SKIPPED)도 나중에 마이페이지에서 저장하면 DONE이 된다
     public void completeOnboarding() {
         this.onboardingStatus = OnboardingStatus.DONE;
     }
 
-    // 취향을 이미 저장한 회원이 건너뛰면 저장한 취향이 무시되는 것처럼 보여서 막는다
     public void skipOnboarding() {
         if (onboardingStatus == OnboardingStatus.DONE) {
             throw new CustomException(ErrorCode.ONBOARDING_ALREADY_DONE);
@@ -132,7 +115,6 @@ public class User extends BaseTimeEntity {
         this.passwordHash = passwordHash;
     }
 
-    // 구글로만 가입한 회원이 처음 비밀번호를 정한다. 이후에는 이메일·비밀번호 로그인도 된다
     public void setInitialPassword(String passwordHash) {
         this.passwordHash = passwordHash;
     }

@@ -41,25 +41,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/**
- * 추천 작업 한 건 (recommendationExecutor 스레드에서 돈다). 단계마다 Redis 진행 상황을 고쳐서 FE polling이 보여준다.
- *
- * <ol>
- *   <li>CANDIDATES: 후보 고르기 ({@link CandidateService}). 하루 2곳도 안 되면 FAILED(NOT_ENOUGH_CANDIDATES)</li>
- *   <li>COMPOSE: AI에 코스 3개 요청</li>
- *   <li>HOURS: {@link CourseValidator}로 확인 → 어긴 규칙이 있으면 그 목록을 붙여 한 번 더 요청. 또 어기거나 AI 오류·시간 초과면
- *       {@link FallbackCourseBuilder}의 기본 코스 (FALLBACK)</li>
- *   <li>ROUTES·MEALS: 이동·시각·식사 칸 ({@link CourseAssembler})</li>
- *   <li>결과를 Redis에 저장하고 상태를 DONE/FALLBACK으로 바꾼다</li>
- * </ol>
- * 어느 단계든 예상하지 못한 예외는 FAILED(INTERNAL)로 끝낸다. FAILED는 하루 횟수에서 빠지므로 따로 돌려줄 것이 없다.
- * 전체 제한 시간(25초)이 지나면 AI 재요청과 외부 경로 API를 건너뛰어 FE의 30초 대기 안에 끝나게 한다.
- */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class RecommendationWorker {
-
     static final int COURSES = 3;
     static final int MIN_CANDIDATES_PER_DAY = 2;
     private static final int TOP_PROFILE_CATEGORIES = 5;
@@ -72,8 +57,7 @@ public class RecommendationWorker {
     private final FallbackCourseBuilder fallbackCourseBuilder;
     private final CourseAssembler courseAssembler;
     private final RecommendationResultStore resultStore;
-    // final이 아닌 이유: 테스트가 AI 응답을 바꿔 끼운다 (ReflectionTestUtils, RouteService의 외부 클라이언트와 같은 방식).
-    // @NonNull이 붙은 필드는 @RequiredArgsConstructor 생성자에 들어간다
+    // 테스트가 AI 응답을 바꿔 끼우려고 final 아님
     @NonNull
     private AiCourseClient aiCourseClient;
     private final PreferenceService preferenceService;
@@ -171,7 +155,6 @@ public class RecommendationWorker {
         }
     }
 
-    // 다시 추천: 빼달라고 한 곳 + 직전 결과에 있던 곳
     private Set<Long> penalized(RecommendationRequest request) {
         Set<Long> ids = new HashSet<>(request.excludedIds());
         if (request.getPreviousRequestId() != null) {
@@ -181,7 +164,6 @@ public class RecommendationWorker {
         return ids;
     }
 
-    /** [최소, 최대] 하루 장소 수: 여유롭게 2~3, 빡빡하게 4~5, 아이와 가면 하나씩 줄인다 */
     static int[] placesPerDay(Pace pace, Companion companion) {
         int min = pace == Pace.PACKED ? 4 : 2;
         int max = pace == Pace.PACKED ? 5 : 3;
@@ -192,7 +174,6 @@ public class RecommendationWorker {
         return new int[]{min, max};
     }
 
-    // 실내 장소가 절반이 안 되면 true (코스 3개 전체 기준)
     private static boolean indoorShortage(List<PlannedCourse> plans) {
         List<ContentSnapshot> places = plans.stream().flatMap(p -> p.days().stream())
                 .flatMap(d -> d.places().stream()).map(p -> p.candidate().content()).toList();

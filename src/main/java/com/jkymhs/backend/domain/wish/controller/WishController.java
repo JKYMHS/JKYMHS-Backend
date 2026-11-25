@@ -16,14 +16,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * 찜 API (로그인 필요). 추가·삭제는 멱등이라 둘 다 200과 현재 상태를 준다.
- */
 @RestController
 @RequestMapping("/api/wishes")
 @RequiredArgsConstructor
 public class WishController {
-
     private final WishService wishService;
 
     @PostMapping("/{contentId}")

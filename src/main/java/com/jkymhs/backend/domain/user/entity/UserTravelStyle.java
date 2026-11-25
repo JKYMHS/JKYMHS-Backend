@@ -18,9 +18,6 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-/**
- * 회원이 고른 여행 스타일 하나 (회원당 1~3행). 같은 스타일이 두 번 저장되지 않게 (user_id, style_code) UNIQUE를 건다.
- */
 @Getter
 @Entity
 @Table(name = "user_travel_styles", uniqueConstraints = {
