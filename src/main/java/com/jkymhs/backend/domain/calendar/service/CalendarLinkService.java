@@ -33,19 +33,11 @@ import java.util.Set;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-/**
- * 캘린더 연동·상태·캘린더 목록·기본 캘린더·해제.
- *
- * 클래스 단위 @Transactional을 두지 않는다. 구글을 부르는 메서드(연동·목록·기본 캘린더·해제)는 DB 트랜잭션(커넥션)을 쥔 채
- * 외부 응답을 기다리지 않게, 구글 호출은 트랜잭션 밖에서 하고 DB 쓰기만 {@link TransactionTemplate}으로 짧게 묶는다.
- * 특히 "토큰 만료 → REVOKED로 바꾸고 401"은 예외를 던져도 REVOKED가 커밋돼야 해서 바깥 트랜잭션이 있으면 안 된다.
- */
+// 구글 호출 중 DB 커넥션을 잡지 않으려고 트랜잭션 없음
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class CalendarLinkService {
-
-    // FE가 동의 화면을 열 때 요청하는 캘린더 권한. 사용자가 체크박스를 끄면 scope에서 빠진 채로 돌아온다
     static final Set<String> REQUIRED_SCOPES = Set.of(
             "https://www.googleapis.com/auth/calendar.events",
             "https://www.googleapis.com/auth/calendar.calendarlist.readonly");
@@ -59,16 +51,7 @@ public class CalendarLinkService {
     private final TransactionTemplate transactionTemplate;
     private final Clock clock;
 
-    // ---------- 연동 ----------
-
-    /**
-     * 인가 코드 → 토큰 → 권한 확인 → 이메일 → 저장. 이미 연동돼 있으면(만료 포함) 새 토큰으로 바꾸고 ACTIVE로 되돌린다.
-     *
-     * 리프레시 토큰은 동의 화면을 access_type=offline, prompt=consent로 열어야 온다. 없으면 서버가 나중에 일정을 쓸 수 없어서
-     * 연동을 거부한다 (400 CALENDAR_PERMISSION_DENIED — FE가 "권한을 모두 허용해주세요"를 보여준다).
-     */
     public CalendarConnectResponse connect(Long userId, CalendarConnectRequest request) {
-        // 암호화 키가 없으면 구글 인가 코드를 쓰기(일회용) 전에 실패시킨다
         tokenCipher.checkKey();
         GoogleTokens tokens = googleCalendarClient.exchangeCode(request.code(), request.redirectUri());
         Set<String> granted = scopes(tokens.scope());
@@ -101,8 +84,6 @@ public class CalendarLinkService {
         return Arrays.stream(scope.trim().split("\\s+")).collect(Collectors.toSet());
     }
 
-    // ---------- 상태 ----------
-
     @Transactional(readOnly = true)
     public CalendarStatusResponse status(Long userId) {
         Optional<GoogleCalendarLink> link = linkRepository.findByUserId(userId);
@@ -115,9 +96,6 @@ public class CalendarLinkService {
                 .orElseGet(() -> new CalendarStatusResponse(false, null, null, null, null, uploaded, trips));
     }
 
-    // ---------- 캘린더 목록·기본 캘린더 ----------
-
-    /** 일정을 쓸 수 있는 캘린더만 (owner·writer). 읽기 전용(공휴일·구독 캘린더)은 업로드 대상이 될 수 없어서 뺀다 */
     public CalendarListResponse calendars(Long userId) {
         List<CalendarListResponse.Calendar> calendars = writableCalendars(userId).stream()
                 .map(entry -> new CalendarListResponse.Calendar(entry.id(), entry.name(), entry.primary(), true))
@@ -125,9 +103,6 @@ public class CalendarLinkService {
         return new CalendarListResponse(calendars);
     }
 
-    /**
-     * 기본 캘린더 바꾸기. 목록에 있고 쓸 수 있는 캘린더만 고를 수 있다. "primary"는 구글이 늘 받아주는 기본 캘린더 별칭이라 확인 없이 받는다.
-     */
     public CalendarDefaultResponse changeDefault(Long userId, String calendarId) {
         String target = calendarId.trim();
         if (!GoogleCalendarLink.PRIMARY_CALENDAR.equals(target)) {
@@ -155,7 +130,6 @@ public class CalendarLinkService {
                 .orElseThrow(() -> new CustomException(ErrorCode.CALENDAR_NOT_LINKED, "연동 없음 또는 만료"));
     }
 
-    /** 리프레시 토큰으로 액세스 토큰을 받는다. 토큰이 거부되면(invalid_grant) 연동을 REVOKED로 바꾸고 401 */
     private String accessToken(GoogleCalendarLink link) {
         String refreshToken = tokenCipher.decrypt(link.getEncryptedRefreshToken());
         return callGoogle(() -> googleCalendarClient.refreshAccessToken(refreshToken), link.getUserId());
@@ -181,14 +155,6 @@ public class CalendarLinkService {
                 .ifPresent(GoogleCalendarLink::revoke));
     }
 
-    // ---------- 해제 ----------
-
-    /**
-     * deleteEvents=true: 올린 일정을 모두 지우는 DELETE_ALL 작업을 넣는다. 연동 행은 작업이 끝날 때 지운다
-     * (작업이 토큰 사본을 들고 있어서 그사이 다시 연동해도 새 연동을 건드리지 않는다).
-     * deleteEvents=false 또는 이미 만료된 연동: 바로 연동 행을 지우고 항목의 캘린더 정보를 비운다. 구글 쪽 일정은 그대로 남는다.
-     * 토큰 폐기(revoke)는 커밋 뒤에 부르고, 실패해도 해제는 그대로 둔다.
-     */
     public CalendarDisconnectResponse disconnect(Long userId, boolean deleteEvents) {
         GoogleCalendarLink link = linkRepository.findByUserId(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.RESOURCE_NOT_FOUND, LINK_NOT_FOUND, "연동 없음"));
@@ -214,7 +180,6 @@ public class CalendarLinkService {
         return new CalendarDisconnectResponse(null);
     }
 
-    // 키를 바꿨거나 잃어버려도 연동 해제는 돼야 한다 (토큰 폐기만 건너뛴다)
     private String decryptQuietly(String encrypted) {
         try {
             return tokenCipher.decrypt(encrypted);

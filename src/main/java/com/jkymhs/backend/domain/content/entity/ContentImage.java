@@ -14,9 +14,6 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/**
- * 상세 화면 사진 (detailImage2). 받을 때마다 그 콘텐츠의 사진을 지우고 새로 넣으므로 순서(sort_order)가 곧 화면 순서다.
- */
 @Getter
 @Entity
 @Table(name = "content_images", uniqueConstraints = @UniqueConstraint(

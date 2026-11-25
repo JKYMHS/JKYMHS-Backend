@@ -10,14 +10,8 @@ import org.springframework.web.client.RestClientException;
 import java.net.SocketTimeoutException;
 import java.net.http.HttpTimeoutException;
 
-/**
- * AI 서버 호출 ({@code ai.provider=http}): {@code POST {ai.base-url}/v1/courses}, {@code Authorization: Bearer {ai.api-key}}.
- * 응답 대기 시간({@code ai.timeout})을 넘기면 {@link AiTimeoutException}, 그 밖의 오류는 {@link AiCourseException}을 던진다.
- * 어느 쪽이든 추천 작업이 기본 추천 코스로 대신하므로 사용자는 실패 화면을 보지 않는다.
- */
 @Slf4j
 public class HttpAiCourseClient implements AiCourseClient {
-
     static final String PATH = "/v1/courses";
 
     private final RestClient restClient;
@@ -50,7 +44,7 @@ public class HttpAiCourseClient implements AiCourseClient {
             }
             throw new AiCourseException("AI 서버 연결 실패: " + e.getMessage(), e);
         } catch (RestClientException e) {
-            // 4xx/5xx·본문 형식 오류. 응답 본문에 내부 정보가 있을 수 있어 메시지만 남긴다
+            // 본문에 내부 정보가 있을 수 있어 메시지만 남김
             log.warn("AI 서버 호출 실패: {}", e.getMessage());
             throw new AiCourseException("AI 서버 호출 실패: " + e.getMessage(), e);
         }

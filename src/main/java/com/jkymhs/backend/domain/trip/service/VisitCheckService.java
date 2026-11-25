@@ -33,18 +33,10 @@ import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-/**
- * 끝난 여행의 방문 확인 (배너, 화면 조회, 저장, "나중에").
- *
- * 배너·메일 대상 조건: 종료일 < 오늘, 확정 일정안에 장소가 1개 이상, 상태가 DONE/DISMISSED가 아님, "나중에"로 미룬 날이 지남,
- * 행동 데이터 수집에 동의함. 방문 확인 결과는 취향 프로필(행동 데이터)로 쓰이기 때문에 동의하지 않은 회원에게는 먼저 묻지 않는다.
- * 화면 조회·저장(링크로 직접 들어온 경우)은 동의를 보지 않는다. 행동 신호는 받는 쪽(행동 데이터 도메인)이 동의를 다시 확인한다.
- */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class VisitCheckService {
-
     private static final String RATING_RANGE = "만족도는 1~5 사이로 입력해주세요.";
     private static final String UNKNOWN_ITEM = "방문 확인할 수 없는 장소입니다.";
 
@@ -57,9 +49,6 @@ public class VisitCheckService {
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
-    /**
-     * 배너에 띄울 여행 (가장 최근에 끝난 대상 여행). 처음 대상이 된 여행은 여기서 PENDING이 된다.
-     */
     @Transactional
     public Optional<Trip> findPendingTrip(Long userId) {
         if (!userConsentService.isAgreed(userId, ConsentType.BEHAVIOR_DATA)) {
@@ -82,7 +71,6 @@ public class VisitCheckService {
                 .orElse(null));
     }
 
-    /** 메일 배치용: 이 여행이 지금 방문 확인 대상인지 (동의 제외 조건) */
     boolean isEligible(Trip trip, LocalDate today) {
         return trip.isEnded(today) && trip.getConfirmedPlanId() != null && !trip.isVisitCheckClosed()
                 && (trip.getVisitCheckNextAt() == null || !trip.getVisitCheckNextAt().isAfter(today))
@@ -109,9 +97,6 @@ public class VisitCheckService {
                 items.size(), days);
     }
 
-    /**
-     * 답한 장소만 저장한다 (부분 저장). 처음 답한 장소만 행동 신호를 낸다 (고쳐도 다시 내지 않는다 — 같은 방문이 두 번 세지지 않게).
-     */
     @Transactional
     public VisitCheckSaveResponse save(Long userId, Long tripId, VisitCheckSaveRequest request) {
         Trip trip = tripAccess.ownedTripForUpdate(userId, tripId);
@@ -154,7 +139,6 @@ public class VisitCheckService {
         return new VisitCheckSaveResponse(trip.getVisitCheckStatus(), reviews.size(), items.size());
     }
 
-    /** "나중에": 처음이면 3일 뒤 다시, 두 번째면 더 묻지 않는다 */
     @Transactional
     public VisitCheckDismissResponse dismiss(Long userId, Long tripId) {
         Trip trip = tripAccess.ownedTripForUpdate(userId, tripId);
@@ -166,7 +150,6 @@ public class VisitCheckService {
         return new VisitCheckDismissResponse(trip.getVisitCheckStatus(), trip.getVisitCheckNextAt());
     }
 
-    // 끝나지 않았거나, 확정 일정안(장소 1개 이상)이 없거나, 더 묻지 않기로 한 여행이면 409
     private List<PlanItem> availableItems(Trip trip) {
         if (!trip.isEnded(LocalDate.now(clock))) {
             throw notAvailable("아직 끝나지 않은 여행");
@@ -190,7 +173,6 @@ public class VisitCheckService {
                 .collect(Collectors.toMap(VisitReview::getPlanItemId, Function.identity()));
     }
 
-    // 만족 4~5 → +10, 보통 3 → +5, 불만족 1~2 → -3, 안 감 → 신호 없음
     private static Optional<BehaviorSignalType> signalType(boolean visited, Integer rating) {
         if (!visited || rating == null) {
             return Optional.empty();

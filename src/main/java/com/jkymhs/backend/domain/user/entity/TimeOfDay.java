@@ -5,9 +5,6 @@ import lombok.RequiredArgsConstructor;
 
 import java.time.LocalTime;
 
-/**
- * 여행을 하루 중 언제 시작하는지. 추천 요청 화면의 "첫날 시작 시간" 기본값이 이 시각이다.
- */
 @RequiredArgsConstructor
 public enum TimeOfDay implements CodeEnum {
 

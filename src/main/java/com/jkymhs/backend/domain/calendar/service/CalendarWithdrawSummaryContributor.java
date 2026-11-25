@@ -8,13 +8,9 @@ import org.springframework.stereotype.Component;
 
 import java.util.Map;
 
-/**
- * 탈퇴 안내 화면의 "구글 캘린더에 올린 일정 n개가 지워집니다".
- */
 @Component
 @RequiredArgsConstructor
 public class CalendarWithdrawSummaryContributor implements WithdrawSummaryContributor {
-
     private final TripCalendarSupport tripCalendarSupport;
 
     @Override

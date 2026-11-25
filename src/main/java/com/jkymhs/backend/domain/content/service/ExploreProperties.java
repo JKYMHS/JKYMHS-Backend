@@ -6,12 +6,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.validation.annotation.Validated;
 
-/**
- * application.yml {@code explore.*} (탐색 목록·자동완성·상세의 화면 규칙 값).
- *
- * @param closingSoonMinutes 닫기 몇 분 전부터 "곧 마감(soon)"으로 보여줄지 (FE 문서에 없어서 60분으로 정했다)
- * @param pageSizeMax        목록 한 페이지 최대 개수
- */
 @Validated
 @ConfigurationProperties(prefix = "explore")
 public record ExploreProperties(

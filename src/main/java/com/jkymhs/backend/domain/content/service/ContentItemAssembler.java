@@ -11,11 +11,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * 콘텐츠 id 목록 → 카드({@link ContentItemResponse}) 목록. 목록·비교 담기가 같이 쓴다.
- * 지역·소분류 이름은 {@link ContentService#findSnapshots}가 한 번에 채우고, 찜 여부는 {@link ContentPersonalization}이 한 번에 준다
- * (카드마다 따로 조회하면 N+1 쿼리가 된다).
- */
 @Component
 @RequiredArgsConstructor
 public class ContentItemAssembler {
@@ -25,9 +20,6 @@ public class ContentItemAssembler {
     private final ExploreProperties exploreProperties;
     private final Clock clock;
 
-    /**
-     * @param ids 보여줄 순서대로. 삭제됐거나 없는 id는 빠진다
-     */
     public List<ContentItemResponse> toItems(List<Long> ids, Long userId) {
         return toItems(ids, contentService.findSnapshots(ids), userId);
     }

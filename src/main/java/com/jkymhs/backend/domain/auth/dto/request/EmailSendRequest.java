@@ -18,7 +18,6 @@ public record EmailSendRequest(
         VerificationPurpose purpose
 ) {
 
-    // " User@Example.com"과 "user@example.com"을 같은 이메일로 본다. 안 그러면 Redis 키와 회원 조회가 서로 다른 이메일로 갈린다
     public EmailSendRequest {
         email = email == null ? null : email.trim().toLowerCase(Locale.ROOT);
     }

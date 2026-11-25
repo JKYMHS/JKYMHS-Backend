@@ -10,12 +10,6 @@ import org.springframework.validation.annotation.Validated;
 
 import java.time.Duration;
 
-/**
- * application.yml {@code tour-api.*}. 값이 틀리면(한도 0, 타임아웃 없음) 서버가 뜰 때 바로 실패한다.
- * {@code tour-api.import.*}는 {@code import}가 자바 예약어라 record 필드로 쓸 수 없어서 {@code TourImportProperties}로 따로 읽는다.
- *
- * @param serviceKey 비어 있어도 서버는 뜬다. 동기화 배치만 경고를 남기고 건너뛴다
- */
 @Validated
 @ConfigurationProperties(prefix = "tour-api")
 public record TourApiProperties(
@@ -31,9 +25,6 @@ public record TourApiProperties(
         return serviceKey != null && !serviceKey.isBlank();
     }
 
-    /**
-     * @param introPerRun 한 번 실행에 운영 정보(detailIntro2)를 새로 받을 콘텐츠 수
-     */
     public record Sync(
             @DefaultValue("0 0 4 * * *") String cron,
             @DefaultValue("300") @Min(0) int introPerRun

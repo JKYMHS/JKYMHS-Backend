@@ -12,9 +12,6 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Map;
 
-/**
- * TourAPI 응답 항목(필드 이름 → 문자열) → 적재용 record. 형식이 틀린 값은 null로 둔다 (한 건 때문에 배치 전체가 멈추지 않게).
- */
 public final class TourApiItems {
 
     private static final DateTimeFormatter YYYYMMDD = DateTimeFormatter.BASIC_ISO_DATE;
@@ -23,11 +20,6 @@ public final class TourApiItems {
     private TourApiItems() {
     }
 
-    /**
-     * 목록 항목(areaBasedList2, areaBasedSyncList2, searchFestival2) → 콘텐츠.
-     *
-     * @return 다루지 않는 종류(레포츠·쇼핑 등)이거나 id가 없으면 null
-     */
     public static ContentSource toContentSource(Map<String, String> item) {
         Long id = parseLong(item.get("contentid"));
         Integer typeId = parseInt(item.get("contenttypeid"));
@@ -45,7 +37,6 @@ public final class TourApiItems {
                 dateTime(item.get("modifiedtime")));
     }
 
-    /** showflag=0이면 TourAPI에서 내려간 콘텐츠 */
     public static boolean isHidden(Map<String, String> item) {
         return "0".equals(text(item.get("showflag")));
     }
@@ -54,7 +45,6 @@ public final class TourApiItems {
         return parseLong(item.get("contentid"));
     }
 
-    /** detailIntro2 → 운영 정보. 관광지·문화시설·축제가 쓰는 필드 이름이 달라서 있는 쪽을 고른다 */
     public static TourIntro toIntro(Map<String, String> item) {
         if (item == null) {
             return null;
@@ -72,11 +62,6 @@ public final class TourApiItems {
                 text(item.get("program")));
     }
 
-    /**
-     * detailPetTour2의 동반 구분(acmpyTypeCd: "동반가능", "일부구역 동반가능", "동반불가") → 동반 가능 여부.
-     *
-     * @return 정보가 없으면 null (모름)
-     */
     public static Boolean petAllowed(Map<String, String> item) {
         if (item == null) {
             return null;

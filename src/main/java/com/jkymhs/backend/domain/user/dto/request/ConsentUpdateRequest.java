@@ -11,9 +11,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/**
- * 바꿀 동의 항목만 보낸다 (1~6개, 같은 항목 중복 불가). type은 대문자 상수 이름("LOCATION")이다.
- */
 public record ConsentUpdateRequest(
         @NotNull(message = "변경할 동의 항목을 입력해주세요.")
         @Size(min = 1, max = 6, message = "변경할 동의 항목을 입력해주세요.")
@@ -29,7 +26,6 @@ public record ConsentUpdateRequest(
         return types.stream().distinct().count() == types.size();
     }
 
-    // 검증을 통과한 뒤에만 부른다 (type·agreed가 모두 있고 중복이 없다)
     public Map<ConsentType, Boolean> toChanges() {
         Map<ConsentType, Boolean> changes = new EnumMap<>(ConsentType.class);
         consents.forEach(item -> changes.put(item.type(), item.agreed()));

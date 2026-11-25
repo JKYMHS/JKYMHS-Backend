@@ -12,18 +12,12 @@ import jakarta.validation.constraints.Size;
 
 import java.util.List;
 
-/**
- * 경로 계산 요청. 일정 화면이 장소 사이 구간을 한 번에 보낸다 (일정안에 장소가 최대 30개라 구간도 30개까지).
- *
- * @param companion 동행 (아이·부모님이면 도보 기준이 짧아진다). 없으면 일반 기준
- */
 public record RouteCalculateRequest(
         @NotEmpty(message = "구간을 1개 이상 보내주세요.")
         @Size(max = 30, message = "구간은 최대 30개까지 계산할 수 있습니다.")
         List<@NotNull(message = "구간을 입력해주세요.") @Valid SegmentRequest> segments,
         Companion companion
 ) {
-
     public List<Segment> toSegments() {
         return segments.stream().map(s -> new Segment(s.from().toLatLng(), s.to().toLatLng())).toList();
     }
@@ -42,7 +36,6 @@ public record RouteCalculateRequest(
             @DecimalMin(value = "-180", message = "경도가 올바르지 않습니다.")
             @DecimalMax(value = "180", message = "경도가 올바르지 않습니다.") Double lng
     ) {
-
         LatLng toLatLng() {
             return new LatLng(lat, lng);
         }

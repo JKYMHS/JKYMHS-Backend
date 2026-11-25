@@ -14,10 +14,6 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/**
- * 카테고리 ↔ 관광공사 분류 코드. 코드는 어느 단계든 될 수 있다 ("HS"는 대분류 전체, "VE07"은 중분류, "HS010100"은 소분류 하나).
- * 콘텐츠의 대·중·소분류(lcls1/2/3) 중 하나라도 이 코드와 같으면 그 카테고리에 속한다.
- */
 @Getter
 @Entity
 @Table(name = "category_mappings", uniqueConstraints = @UniqueConstraint(

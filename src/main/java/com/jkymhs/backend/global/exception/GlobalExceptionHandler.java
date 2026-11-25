@@ -46,7 +46,6 @@ public class GlobalExceptionHandler {
         return toResponse(ErrorResponse.of(errorCode, message, description));
     }
 
-    // RequestRejectedException: 시큐리티 방화벽은 헤더를 읽는 순간 값을 검사한다. 컨트롤러가 User-Agent를 읽다가 제어 문자를 만나면 여기로 온다
     @ExceptionHandler({
             HttpMessageNotReadableException.class,
             MissingServletRequestParameterException.class,
@@ -68,14 +67,12 @@ public class GlobalExceptionHandler {
         return toResponse(body, e.getHeaders());
     }
 
-    // 연결 실패·응답 없음 외에, 명령 도중 연결이 끊기거나 Redis가 아직 시작 중일 때(RedisSystemException)도 503
     @ExceptionHandler({RedisConnectionFailureException.class, QueryTimeoutException.class, RedisSystemException.class})
     public ResponseEntity<ErrorResponse> handleRedisFailure(Exception e) {
         log.error("Redis unavailable: {}", e.getMessage());
         return toResponse(ErrorResponse.of(ErrorCode.SERVICE_UNAVAILABLE, "일시적인 서버 장애"));
     }
 
-    // 탈취 처리·로그아웃의 일괄 UPDATE끼리 서로의 행을 기다리면 DB가 한쪽을 취소한다(데드락). 다시 보내면 되는 요청이라 500 대신 503이다
     @ExceptionHandler(CannotAcquireLockException.class)
     public ResponseEntity<ErrorResponse> handleLockFailure(CannotAcquireLockException e) {
         log.warn("DB lock conflict: {}", e.getMessage());
@@ -92,7 +89,6 @@ public class GlobalExceptionHandler {
         return toResponse(ErrorResponse.of(ErrorCode.INTERNAL_SERVER_ERROR, "서버 내부 오류"));
     }
 
-    // 위에서 따로 잡지 않은 스프링 MVC 클라이언트 오류(415, 406 등)는 원래 상태코드와 헤더를 유지한다
     private ResponseEntity<ErrorResponse> handleSpringClientError(org.springframework.web.ErrorResponse springError) {
         String detail = springError.getBody().getDetail();
         ErrorResponse body = ErrorResponse.of(
@@ -104,8 +100,6 @@ public class GlobalExceptionHandler {
         return toResponse(body, springError.getHeaders());
     }
 
-    // @ModelAttribute 쿼리 파라미터의 타입 변환 실패(예: ?companion=dog, ?size=abc)는 기본 문구가 스프링의 영어 기술 문구라서
-    // @RequestParam 타입 오류(message 입력값이 올바르지 않습니다. / description 요청 형식이 올바르지 않습니다.)와 맞춘다
     private static String messageOf(FieldError error, String bindingFailureMessage) {
         return error.isBindingFailure() ? bindingFailureMessage : error.getDefaultMessage();
     }
@@ -114,7 +108,6 @@ public class GlobalExceptionHandler {
         return toResponse(body, HttpHeaders.EMPTY);
     }
 
-    // Content-Type을 JSON으로 고정해야 Accept 헤더와 상관없이 에러 본문이 항상 내려간다
     private ResponseEntity<ErrorResponse> toResponse(ErrorResponse body, HttpHeaders headers) {
         return ResponseEntity.status(body.status())
                 .headers(headers)

@@ -46,23 +46,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-/**
- * 추천 코스를 여행/일정안으로 저장한다 (004-07). 일정안 만들기 자체는 여행 도메인({@link TripService})이 하고,
- * 여기서는 Redis의 코스를 {@link PlanDraft}로 바꾼다.
- *
- * <ul>
- *   <li>장소 칸은 그대로, 고른 식사 칸은 그 자리·그 시각의 음식점 항목이 된다. 고르지 않은 식사 칸과 사용자가 뺀 장소는 저장하지 않는다.</li>
- *   <li>이동은 결과에 있던 값을 쓰되, 앞 항목이 바뀐 항목(식사 뒤, 뺀 장소 뒤)만 {@link RouteService#routes}로 다시 계산한다.</li>
- *   <li>{tripId} → 기존 여행에 일정안 추가 (확정 여부 선택), {newTrip} → 추천 조건으로 채운 새 여행 + 확정안.</li>
- *   <li>사용자가 뺀 장소는 취향 신호(AI_REMOVE, −3)로 보낸다. 일정 담기 신호(SCHEDULE_SAVE)는 여행 도메인이 보낸다.</li>
- * </ul>
- * 한 트랜잭션이라 여행 도메인에서 422/403이 나면 아무것도 남지 않는다.
- */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class RecommendationSaveService {
-
     static final String NOT_FOUND_MESSAGE = "추천 결과가 만료되었습니다. 다시 추천받아주세요.";
     private static final DateTimeFormatter PLAN_NAME_DATE = DateTimeFormatter.ofPattern("MM.dd");
     private static final int MAX_TRIP_REGIONS = 5;
@@ -77,10 +64,6 @@ public class RecommendationSaveService {
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
-    /**
-     * @throws CustomException 400 INVALID_INPUT(대상 둘 다·둘 다 없음, 음식점이 아님, 없는 식사 칸), 403/404 여행,
-     *                         404 결과 만료·없는 courseId, 422 PLAN_EXCEEDS_TRIP_PERIOD
-     */
     @Transactional
     public RecommendationSaveResponse save(Long userId, Long requestId, RecommendationSaveRequest body) {
         RecommendationSaveRequest.Target target = body.target();
@@ -115,8 +98,6 @@ public class RecommendationSaveService {
         return new RecommendationSaveResponse(ids.tripId(), ids.planId(), confirmed);
     }
 
-    // ---------- 코스 → 일정안 초안 ----------
-
     private List<PlanItemDraft> items(CourseResponse course, RecommendationSaveRequest body, String companion) {
         Set<Long> removed = new HashSet<>(body.removedIds());
         Map<String, Long> meals = mealSelections(course, body);
@@ -137,7 +118,6 @@ public class RecommendationSaveService {
                     pendingMove = move;
                 } else if (item instanceof CourseResponse.PlaceItem place) {
                     if (!removed.contains(place.contentId())) {
-                        // 결과의 이동은 "결과에서 바로 앞 칸"에서 온 값이라, 저장본의 앞 항목이 같을 때만 그대로 쓴다
                         boolean keepMove = pendingMove != null && Objects.equals(finalPrevious, originalPrevious);
                         entries.add(new Entry(day.dayNumber(), ++sortOrder, place.contentId(), place.lat(), place.lng(),
                                 place.startTime(), place.endTime(), place.stayMinutes(), place.reason(),
@@ -161,10 +141,6 @@ public class RecommendationSaveService {
         return entries.stream().map(Entry::toDraft).toList();
     }
 
-    /*
-     * 다시 계산할 구간을 모아서 한 번에 부른다. 그날 첫 항목: 첫날은 출발지에서 오고, 둘째 날부터는 이동이 없다
-     * (여행 도메인이 전날 숙소를 모르므로 그날 첫 항목의 이동은 비운다).
-     */
     private void fillMoves(List<Entry> entries, LatLng origin, String companion) {
         List<Segment> segments = new ArrayList<>();
         List<Entry> targets = new ArrayList<>();
@@ -194,7 +170,6 @@ public class RecommendationSaveService {
         }
     }
 
-    // (날짜, 식사) → 음식점 id. 코스에 없는 식사 칸을 고르면 400
     private static Map<String, Long> mealSelections(CourseResponse course, RecommendationSaveRequest body) {
         Set<String> slots = new HashSet<>();
         for (CourseResponse.Day day : course.days()) {
@@ -230,8 +205,6 @@ public class RecommendationSaveService {
     private static String mealKey(int dayNumber, MealType mealType) {
         return dayNumber + ":" + mealType.name();
     }
-
-    // ---------- 새 여행 ----------
 
     private NewTripCommand newTrip(RecommendationRequest request, RecommendationSaveRequest.NewTrip newTrip) {
         List<Long> districtIds = recommendationService.districtIdsOf(request.getId());

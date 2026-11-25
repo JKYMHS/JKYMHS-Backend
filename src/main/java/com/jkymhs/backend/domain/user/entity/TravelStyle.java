@@ -4,12 +4,6 @@ import com.jkymhs.backend.global.web.CodeEnum;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
-/**
- * 온보딩·마이페이지에서 고르는 여행 스타일 7개 (1~3개 선택).
- * 값이 고정이고 운영 중에 바뀔 일이 없어서 테이블 대신 enum으로 둔다. FE 값은 소문자 code("rest")이고,
- * DB(user_travel_styles.style_code)에는 대문자 name()이 저장된다.
- * label·description은 FE 목업(mocks/data/member.ts)과 같은 문구라서 FE가 이 목록을 그대로 그린다.
- */
 @Getter
 @RequiredArgsConstructor
 public enum TravelStyle implements CodeEnum {
@@ -23,7 +17,6 @@ public enum TravelStyle implements CodeEnum {
     FESTIVAL("festival", "축제·공연", "지역 축제·공연·행사");
 
     private final String code;
-    // Enum.name()과 헷갈리지 않게 화면 이름은 label로 부른다 (응답 JSON에서는 name)
     private final String label;
     private final String description;
 

@@ -22,9 +22,6 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-/**
- * 지역 조회·검증. 다른 도메인(탐색, AI 추천, 여행)은 regions 테이블을 직접 읽지 않고 이 서비스만 쓴다.
- */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -42,9 +39,6 @@ public class RegionService {
     private final RegionRepository regionRepository;
     private final JdbcTemplate jdbcTemplate;
 
-    /**
-     * @throws CustomException 400 INVALID_INPUT "잘못된 필터 값입니다." — 없는 지역 (FE가 보낸 필터 값이 틀린 경우라 404가 아니다)
-     */
     public RegionRef getRegion(Long id) {
         if (id == null) {
             throw invalidFilter("지역 id 없음");
@@ -56,9 +50,6 @@ public class RegionService {
         return RegionRef.from(found.getFirst());
     }
 
-    /**
-     * 없는 id는 결과 맵에서 빠진다 (검증이 필요하면 {@link #getRegion}).
-     */
     public Map<Long, RegionRef> getRegions(Collection<Long> ids) {
         if (ids == null || ids.isEmpty()) {
             return Map.of();
@@ -68,7 +59,6 @@ public class RegionService {
                 .collect(Collectors.toMap(RegionRef::id, Function.identity()));
     }
 
-    /** 모든 지역 (시·도 → 시·군·구 순, 각 단계 안에서는 코드 순). */
     public List<RegionRef> getAllRegions() {
         return regionRepository.findAllWithParent().stream().map(RegionRef::from).toList();
     }
@@ -81,11 +71,6 @@ public class RegionService {
         return regionRepository.findChildren(sidoId).stream().map(RegionRef::from).toList();
     }
 
-    /**
-     * 시·군·구 id들이 모두 그 시·도 아래인지 확인한다 (AI 추천의 regionId + districtIds 등).
-     *
-     * @throws CustomException 400 INVALID_INPUT "잘못된 필터 값입니다."
-     */
     public void validateDistricts(Long sidoId, List<Long> districtIds) {
         RegionRef sido = getRegion(sidoId);
         if (!sido.isSido()) {
@@ -116,13 +101,6 @@ public class RegionService {
         return new RegionCodeIndex(sidoIds, sigunguIds);
     }
 
-    /**
-     * 지역 목록을 코드 기준으로 넣거나 이름을 고친다. 같은 코드면 id가 유지된다 (몇 번을 돌려도 결과가 같다).
-     * 시·도를 먼저 넣고 그 id를 읽어서 시·군·구의 parent_id로 쓴다.
-     * 정렬 순서는 코드 순이다 (세종 36110은 앞 두 자리 36으로 비교해서 충남(44) 앞에 둔다).
-     *
-     * @return 넣거나 고친 행 수
-     */
     @Transactional
     public int upsertAll(List<RegionSource> sources) {
         List<RegionSource> sidos = sources.stream()
@@ -152,7 +130,6 @@ public class RegionService {
         for (Map.Entry<String, List<RegionSource>> entry : byParent.entrySet()) {
             Long parentId = sidoIds.get(entry.getKey());
             if (parentId == null) {
-                // 시·도 행이 없는 시·군·구는 어디에도 매달 수 없어서 넣지 않는다
                 continue;
             }
             List<RegionSource> children = entry.getValue();
@@ -166,7 +143,6 @@ public class RegionService {
         return sidoRows.size() + sigunguRows.size();
     }
 
-    /** 이 id들 중 시·도인 것. 나머지는 시·군·구이거나 없는 id다. */
     public Set<Long> sidoIdsOf(Collection<Long> ids) {
         return getRegions(ids).values().stream().filter(RegionRef::isSido).map(RegionRef::id)
                 .collect(Collectors.toSet());

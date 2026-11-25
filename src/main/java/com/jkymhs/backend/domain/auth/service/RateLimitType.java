@@ -5,9 +5,6 @@ import lombok.RequiredArgsConstructor;
 
 import java.time.Duration;
 
-/**
- * IP 기준 요청 제한 종류와 한도 (Redis 키 설계: rate:{purpose}:{ip}).
- */
 @Getter
 @RequiredArgsConstructor
 public enum RateLimitType {

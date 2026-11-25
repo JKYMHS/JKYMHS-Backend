@@ -27,23 +27,10 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
-/**
- * 추천 후보 고르기 (작업 1단계 CANDIDATES).
- *
- * <ol>
- *   <li><b>후보 풀</b>: 지역·기간이 같은 요청이 같이 쓰는 인기 순 200곳. Redis({@code candidates:*}, 1시간)에 id만 넣어 두고,
- *       없으면 콘텐츠 서비스에서 읽어서 채운다. 회원마다 다른 점수는 풀에 넣지 않는다 (남의 취향이 섞이면 안 되므로, §4 #27).</li>
- *   <li><b>회원 점수</b>: 인기(0~1000 → 0~1) × 0.4 + 취향 프로필(중분류 lcls2, 최대값 기준 −1~1) × 0.4 + 여행 스타일 일치 × 0.2
- *       + 실내 선호(실내 +0.15, 실외 −0.15) − 뺄 곳(다시 추천 제외·직전 코스) 0.5. 반려동물과 가면 동반 불가로 확인된 곳은 뺀다.</li>
- *   <li>상위 40곳 + 꼭 포함할 장소(풀에 없어도)를 점수 순으로 돌려준다.</li>
- * </ol>
- * Redis가 죽으면 캐시 없이 DB에서 바로 읽는다 (G12).
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class CandidateService {
-
     static final double POPULARITY_WEIGHT = 0.4;
     static final double PROFILE_WEIGHT = 0.4;
     static final double STYLE_WEIGHT = 0.2;
@@ -129,7 +116,6 @@ public class CandidateService {
         return value != null && value.startsWith(prefix);
     }
 
-    // 스타일을 고르지 않았으면(건너뜀) 모든 스타일의 코드를 쓴다
     private Set<String> styleCodes(Set<TravelStyle> styles) {
         Set<String> names = new HashSet<>();
         (styles == null || styles.isEmpty() ? Set.of(TravelStyle.values()) : styles)
@@ -143,7 +129,6 @@ public class CandidateService {
         return codes;
     }
 
-    // 프로필 점수를 절댓값 최대 1로 맞춘다 (행동이 많은 회원일수록 원점수가 커져서 인기 점수를 덮지 않게)
     private Map<String, Double> normalizedProfile(CandidateQuery query) {
         ProfileView view = preferenceProfileService.getProfile(query.userId(), query.companion().code());
         Map<String, Double> scores = view.lcls2Scores() == null ? Map.of() : view.lcls2Scores();

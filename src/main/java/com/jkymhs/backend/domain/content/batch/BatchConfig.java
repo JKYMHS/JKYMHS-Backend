@@ -13,7 +13,6 @@ import java.time.Duration;
 @EnableConfigurationProperties({BatchProperties.class, TourImportProperties.class})
 public class BatchConfig {
 
-    // 알림 서버가 느려도 배치가 오래 붙잡히지 않게 짧게 둔다
     private static final Duration ALERT_TIMEOUT = Duration.ofSeconds(5);
 
     @Bean

@@ -36,22 +36,10 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/**
- * 여행 목록 (내 여행 화면).
- *
- * 정렬: 다가오는 여행(종료일 ≥ 오늘)을 시작일 순으로 먼저, 그다음 지난 여행을 시작일 역순으로. 두 묶음은 정렬 방향이 달라서
- * 쿼리 하나로 커서를 만들 수 없다. 그래서 다가오는 쪽을 먼저 읽고, 한 페이지가 덜 차면 지난 쪽에서 이어 채운다.
- * 커서 {f: 필터, g: 마지막 항목의 묶음, d: 시작일, i: id}로 어느 묶음의 어디까지 읽었는지 기억한다.
- *
- * 카드에 필요한 지역·일정안·장소·방문 확인은 페이지의 여행 id로 한 번씩만 모아 읽는다 (여행마다 쿼리를 날리는 N+1을 피한다).
- *
- * 첫 페이지에서 방문 확인 배너 여행을 찾으면서 그 여행 상태를 PENDING으로 바꿀 수 있어서 쓰기 트랜잭션이다.
- */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class TripListService {
-
     private final TripRepository tripRepository;
     private final TripRegionRepository tripRegionRepository;
     private final PlanRepository planRepository;
@@ -118,7 +106,6 @@ public class TripListService {
 
         Map<Long, List<Plan>> plansByTrip = planRepository.findAllByTripIdInOrderByIdAsc(tripIds).stream()
                 .collect(Collectors.groupingBy(Plan::getTripId));
-        // 카드에 보여줄 일정안: 확정안, 없으면 첫 일정안
         Map<Long, Plan> displayPlans = new LinkedHashMap<>();
         for (Trip trip : trips) {
             List<Plan> plans = plansByTrip.getOrDefault(trip.getId(), List.of());
@@ -131,7 +118,6 @@ public class TripListService {
                         displayPlans.values().stream().map(Plan::getId).toList())
                 .stream().collect(Collectors.groupingBy(PlanItem::getPlanId));
 
-        // 끝난 여행의 확정안 장소 중 방문 확인에 답한 것
         List<Long> pastConfirmedItemIds = trips.stream()
                 .filter(trip -> trip.isEnded(today) && trip.getConfirmedPlanId() != null)
                 .flatMap(trip -> itemsByPlan.getOrDefault(trip.getConfirmedPlanId(), List.of()).stream())

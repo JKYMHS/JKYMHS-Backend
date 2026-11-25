@@ -8,10 +8,6 @@ import java.util.Collection;
 import java.util.EnumSet;
 import java.util.Set;
 
-/**
- * 여행 단위 캘린더 상태 (확정 일정안 기준). 올린 항목이 하나도 없으면 none,
- * 바뀌었거나 기다리거나 실패한 항목이 하나라도 있으면 changed, 아니면 synced.
- */
 public enum TripSyncState implements CodeEnum {
     SYNCED("synced"),
     CHANGED("changed"),

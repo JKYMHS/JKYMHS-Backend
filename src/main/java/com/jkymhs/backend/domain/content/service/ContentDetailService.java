@@ -29,34 +29,13 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
-/**
- * 콘텐츠 상세 (GET /api/contents/{id}).
- *
- * 소개글·사진은 CSV 초기 적재에 없어서 처음 볼 때 TourAPI에서 받아 DB에 저장하고, 7일(content-detail.refresh-after) 동안은 저장된 값을 쓴다.
- * 매 조회마다 TourAPI를 부르면 하루 호출 한도(개발 키 1000회)를 금방 다 쓰고 응답도 느려진다.
- *
- * <h3>갱신 순서</h3>
- * <ol>
- *   <li>content_details 행이 없거나, 상세를 받은 적이 없거나(fetched_at NULL: CSV·운영 정보로만 만든 행), 받은 지 7일이 지났으면 갱신한다.</li>
- *   <li>Redis {@code SET lock:detail:{id} <uuid> NX PX 10000}으로 락을 잡는다. 인기 콘텐츠를 여러 명이 동시에 열어도 TourAPI는 한 번만 부른다.
- *       락을 못 잡은 요청(다른 요청이 갱신 중)은 기다리지 않고 저장된 값을 보여준다. Redis가 안 되면 락 없이 갱신한다(캐시 장애로 상세가 막히지 않게).</li>
- *   <li>detailCommon2(소개글) → detailIntro2(운영 정보) → detailImage2(사진) → 반려동물 정보를 모르면 detailPetTour2.
- *       소개글 호출이 실패하면 아무것도 저장하지 않는다. 그 뒤 호출이 실패하면 받은 데까지만 저장한다 (나머지는 기존 값 유지).</li>
- *   <li>락은 Lua 스크립트로 "내가 건 값일 때만" 지운다. 갱신이 10초를 넘겨 락이 풀린 뒤 다른 요청이 새로 건 락을 지우지 않기 위해서다.</li>
- * </ol>
- *
- * TourAPI가 실패해도 200이다: 저장된 상세가 있으면 그것을 주고 {@code isStale=true}, 없으면 기본 정보만 주고 {@code detailAvailable=false}
- * (FE가 상세 영역에 재시도 안내를 띄운다, PRD 부분 실패 처리).
- *
- * 클래스에 트랜잭션을 걸지 않는다. 외부 호출(최대 수 초)을 하는 동안 DB 커넥션을 잡고 있지 않게 하고,
- * 갱신 뒤 다시 읽을 때 새 값이 보이게 하기 위해서다 (저장은 {@link ContentService#applyDetail}이 자기 트랜잭션으로 한다).
- */
+// 외부 호출 중 DB 커넥션을 잡지 않으려고 클래스 트랜잭션 없음
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class ContentDetailService {
 
-    // GET으로 값을 확인하고 같을 때만 DEL한다. 두 명령 사이에 다른 요청이 끼지 않게 Redis 안에서 한 번에 실행한다
+    // 내가 건 락일 때만 지움 (남의 락 삭제 방지)
     private static final RedisScript<Long> RELEASE_LOCK = new DefaultRedisScript<>(
             "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
             Long.class);
@@ -72,10 +51,6 @@ public class ContentDetailService {
     private final ExploreProperties exploreProperties;
     private final Clock clock;
 
-    /**
-     * @param userId 비로그인이면 null
-     * @throws CustomException 404 RESOURCE_NOT_FOUND "존재하지 않거나 삭제된 장소입니다."
-     */
     public ContentDetailResponse getDetail(Long id, Long userId) {
         Content content = findActive(id);
         LocalDateTime now = LocalDateTime.now(clock);
@@ -108,9 +83,6 @@ public class ContentDetailService {
         return !fetchedAt.plus(detailProperties.refreshAfter()).isAfter(now);
     }
 
-    /**
-     * @return 새 상세를 저장했으면 true
-     */
     private boolean refresh(Content content) {
         if (!tourApiClient.isConfigured()) {
             log.debug("TourAPI key not configured; detail refresh skipped for {}", content.getId());
@@ -142,7 +114,6 @@ public class ContentDetailService {
         }
     }
 
-    // 소개글(detailCommon2)은 꼭 있어야 하고, 나머지는 받은 데까지만 쓴다. null로 둔 부분은 applyDetail이 기존 값을 그대로 둔다
     private TourDetail fetch(Content content) {
         long id = content.getId();
         Map<String, String> common;
@@ -180,12 +151,10 @@ public class ContentDetailService {
         try {
             redisTemplate.execute(RELEASE_LOCK, List.of(key), token);
         } catch (DataAccessException e) {
-            // 못 지워도 10초 뒤에 저절로 풀린다
             log.warn("detail lock release failed: {}", e.getMessage());
         }
     }
 
-    // 조회 기록은 부가 기능이라 실패해도 상세 응답은 나가야 한다
     private void notifyViewed(Long userId, Long id) {
         try {
             personalization.onViewed(userId, id);

@@ -12,7 +12,6 @@ public record ConsentListResponse(List<Item> consents) {
         return new ConsentListResponse(states.stream().map(Item::from).toList());
     }
 
-    // agreedAt: 동의한 시각. 동의하지 않았으면 null
     public record Item(ConsentType type, boolean required, boolean agreed, LocalDateTime agreedAt) {
 
         static Item from(ConsentState state) {

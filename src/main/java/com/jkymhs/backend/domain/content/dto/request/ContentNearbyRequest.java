@@ -7,12 +7,6 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 
-/**
- * GET /api/contents/nearby 쿼리 파라미터.
- *
- * @param radius 미터. 없으면 종류별 기본값 (음식점 1000, 숙박 3000)
- * @param size   기본 5
- */
 public record ContentNearbyRequest(
         @NotNull(message = "잘못된 필터 값입니다.") NearbyType type,
         @NotNull(message = "좌표 값이 올바르지 않습니다.")

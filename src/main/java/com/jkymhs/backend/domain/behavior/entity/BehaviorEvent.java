@@ -23,15 +23,6 @@ import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 
-/**
- * 취향 프로필을 계산하는 행동 하나 (조회·찜·일정 저장·방문 만족도 등). 행동 데이터 수집에 동의한 회원만 남는다.
- * 동의를 끄거나 탈퇴하면 같은 트랜잭션에서 모두 지운다.
- *
- * lcls2(분류 중분류)는 저장 시점에 콘텐츠에서 복사해 둔다. 프로필을 다시 계산할 때마다 콘텐츠를 다시 읽지 않으려는 것이다.
- * 가중치(weight)도 복사한다. 나중에 가중치 표를 바꿔도 이미 쌓인 기록의 의미가 바뀌지 않게 하려는 것이다.
- * trip_id는 여행 도메인과 묶이지 않게 FK 없이 숫자만 둔다.
- * 프로필 계산이 "이 회원의 최근 180일"을 읽으므로 (user_id, occurred_at) 인덱스를 둔다.
- */
 @Getter
 @Entity
 @Table(name = "behavior_events",
@@ -46,7 +37,6 @@ public class BehaviorEvent {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
-    // FK(users.id)를 만들기 위한 읽기 전용 연관. 값은 위 userId로 쓴다
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", insertable = false, updatable = false,
             foreignKey = @ForeignKey(name = "fk_behavior_events_user_id"))
@@ -55,7 +45,6 @@ public class BehaviorEvent {
     @Column(name = "content_id", nullable = false)
     private Long contentId;
 
-    // 분류를 모르는 콘텐츠면 null (프로필 계산에서 빠진다)
     @Column(length = 6)
     private String lcls2;
 
@@ -67,7 +56,6 @@ public class BehaviorEvent {
     @Column(nullable = false)
     private int weight;
 
-    // 동행 FE 코드("kids" 등). 조회·찜처럼 동행을 모르는 행동은 null
     @Column(length = 20)
     private String companion;
 

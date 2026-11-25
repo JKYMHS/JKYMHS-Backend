@@ -43,14 +43,10 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-/**
- * 여행 만들기·상세·수정·삭제·복제·담기 대상 목록, 그리고 AI 추천이 쓰는 계약(createTripWithPlan, addPlan, getOwnedTrip).
- */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class TripService {
-
     private static final String PAST_START = "지난 날짜는 선택할 수 없습니다.";
     private static final String END_BEFORE_START = "오는 날은 가는 날 이후로 선택해주세요.";
     private static final String MAX_DAYS = "여행 기간은 최대 %d일까지 선택할 수 있습니다.";
@@ -72,11 +68,6 @@ public class TripService {
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
-    // ---------- 만들기 ----------
-
-    /**
-     * 여행과 빈 "기본 코스" 일정안을 만들고 그 일정안을 확정한다 (§4 #2: 여행에는 항상 확정안이 하나 있게 시작한다).
-     */
     @Transactional
     public TripPlanIds create(Long userId, NewTripCommand command) {
         validatePeriod(command.startDate(), command.endDate(), false);
@@ -86,10 +77,6 @@ public class TripService {
         return new TripPlanIds(trip.getId(), plan.getId());
     }
 
-    /**
-     * (AI 추천 → 새 여행으로 저장) 여행을 만들고 초안 일정안을 확정안으로 넣는다.
-     * 여행 만들기 API와 같은 검증을 하되 "가는 날 ≥ 오늘"은 보지 않는다 (추천을 받은 뒤 날짜가 지났을 수 있다).
-     */
     @Transactional
     public TripPlanIds createTripWithPlan(Long userId, NewTripCommand command, PlanDraft draft) {
         validatePeriod(command.startDate(), command.endDate(), true);
@@ -99,11 +86,6 @@ public class TripService {
         return new TripPlanIds(trip.getId(), plan.getId());
     }
 
-    /**
-     * (AI 추천 → 기존 여행에 저장) 일정안을 하나 더 넣는다.
-     *
-     * @throws CustomException 403/404, 400 SCHEDULE_LIMIT_EXCEEDED(일정안 10개), 422 PLAN_EXCEEDS_TRIP_PERIOD
-     */
     @Transactional
     public TripPlanIds addPlan(Long userId, Long tripId, PlanDraft draft, boolean makeConfirmed) {
         Trip trip = tripAccess.ownedTripForUpdate(userId, tripId);
@@ -128,8 +110,6 @@ public class TripService {
         tripRegionRepository.saveAll(regionIds.stream().map(id -> TripRegion.of(trip.getId(), id)).toList());
         return trip;
     }
-
-    // ---------- 상세 ----------
 
     public TripDetailResponse getDetail(Long userId, Long tripId) {
         return detail(tripAccess.ownedTrip(userId, tripId));
@@ -170,12 +150,6 @@ public class TripService {
         return counts;
     }
 
-    // ---------- 수정 ----------
-
-    /**
-     * 보낸 필드만 바꾼다. 기간을 줄여서 일정안 장소가 기간 밖으로 나가면, removeOutOfRangeItems=true일 때만 그 장소들을 지우고
-     * 아니면 422(description = 지워질 장소 수)로 먼저 확인을 받는다.
-     */
     @Transactional
     public TripDetailResponse update(Long userId, Long tripId, TripUpdateRequest request) {
         Trip trip = tripAccess.ownedTripForUpdate(userId, tripId);
@@ -191,7 +165,6 @@ public class TripService {
         List<Long> regionIds = request.regionIds() == null ? null : validateRegions(request.regionIds());
 
         if (periodChanged) {
-            // 가는 날을 바꾸지 않았으면 이미 지난 여행(진행 중 포함)이라도 오는 날만 고칠 수 있다
             validatePeriod(newStart, newEnd, !startChanged);
             int newDays = (int) ChronoUnit.DAYS.between(newStart, newEnd) + 1;
             removeOutOfRange(userId, trip, newDays, Boolean.TRUE.equals(request.removeOutOfRangeItems()));
@@ -235,7 +208,6 @@ public class TripService {
         visitReviewRepository.deleteAllByPlanItemIdIn(ids);
         planItemRepository.deleteAllByIdIn(ids);
 
-        // 뒤쪽 날짜를 통째로 지웠으므로 남은 항목의 순서·이동은 그대로다. 이동 시간 합계와 버전만 고친다
         Set<Long> affected = outOfRange.stream().map(PlanItem::getPlanId).collect(Collectors.toSet());
         Map<Long, Integer> totals = new HashMap<>();
         planItemRepository.findAllByPlanIdInOrderByPlanIdAscDayNumberAscSortOrderAscIdAsc(affected).stream()
@@ -249,7 +221,6 @@ public class TripService {
         }
     }
 
-    // 가는 날이 바뀌면 캘린더에 올린 일정들의 날짜가 모두 달라진다
     private void markConfirmedPlanDirty(Long userId, Trip trip) {
         if (trip.getConfirmedPlanId() == null) {
             return;
@@ -263,12 +234,6 @@ public class TripService {
         eventPublisher.publishEvent(new ConfirmedPlanChangedEvent(userId, trip.getId(), trip.getConfirmedPlanId()));
     }
 
-    // ---------- 삭제·복제 ----------
-
-    /**
-     * 캘린더 일정 정리 이벤트를 먼저 발행하고(지운 뒤에는 event id를 읽을 수 없다), FK 순서대로 지운다:
-     * 방문 확인 → 일정 항목 → 일정안 → 여행 지역 → 여행.
-     */
     @Transactional
     public void delete(Long userId, Long tripId) {
         Trip trip = tripAccess.ownedTripForUpdate(userId, tripId);
@@ -284,9 +249,6 @@ public class TripService {
         tripRepository.deleteByIdInBulk(trip.getId());
     }
 
-    /**
-     * 일정안·장소까지 모두 복사하고 같은 일정안을 확정한다. 캘린더·방문 확인 상태는 비운다 (§5 Q4).
-     */
     @Transactional
     public Long copy(Long userId, Long tripId) {
         Trip source = tripAccess.ownedTrip(userId, tripId);
@@ -309,8 +271,6 @@ public class TripService {
         }
         return copy.getId();
     }
-
-    // ---------- 담기 대상 ----------
 
     public TripTargetsResponse getTargets(Long userId, TripTargetsRequest request) {
         LocalDate today = LocalDate.now(clock);
@@ -353,8 +313,6 @@ public class TripService {
         return new TripTargetsResponse(targets, overlapDefault != null ? overlapDefault : dateDefault);
     }
 
-    // ---------- 검증 ----------
-
     private void validatePeriod(LocalDate start, LocalDate end, boolean allowPastStart) {
         if (start == null || end == null) {
             throw new CustomException(ErrorCode.INVALID_INPUT, "여행 날짜를 선택해주세요.", "날짜 없음");
@@ -381,7 +339,6 @@ public class TripService {
         }
     }
 
-    // 중복은 하나로 합치고, 없는 지역이 하나라도 있으면 400 (지역 목록 API에 없는 값을 보낸 것)
     private List<Long> validateRegions(List<Long> regionIds) {
         List<Long> distinct = regionIds == null ? List.of() : List.copyOf(new LinkedHashSet<>(regionIds));
         if (distinct.isEmpty() || distinct.size() > MAX_REGIONS) {

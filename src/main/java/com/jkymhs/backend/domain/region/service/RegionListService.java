@@ -17,12 +17,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/**
- * GET /api/regions 응답 조립. 지역(RegionService)과 지역별 콘텐츠 수(ContentService)를 합친다.
- *
- * RegionService에 넣지 않은 이유: ContentService가 이미 RegionService를 쓰고 있어서(콘텐츠 → 지역 이름),
- * RegionService가 다시 ContentService를 부르면 두 빈이 서로를 필요로 하는 순환 의존이 생긴다.
- */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -55,7 +49,6 @@ public class RegionListService {
         return new RegionListResponse(sidos);
     }
 
-    // 지역 id → {축제 수, 관광지 수}. 시·도는 아래 시·군·구를 모두 더한 값이고, 시·군·구가 없는 콘텐츠(세종 등)도 시·도에는 들어간다
     private static Map<Long, int[]> countByRegion(List<RegionContentCount> rows) {
         Map<Long, int[]> counts = new LinkedHashMap<>();
         for (RegionContentCount row : rows) {

@@ -6,9 +6,6 @@ import com.jkymhs.backend.global.model.Companion;
 import java.time.LocalDate;
 import java.time.LocalTime;
 
-/**
- * 추천 요청 행을 만들 때 넘기는 조건 (검증이 끝난 값).
- */
 public record RecommendationConditions(
         Long sidoRegionId,
         LocalDate startDate,

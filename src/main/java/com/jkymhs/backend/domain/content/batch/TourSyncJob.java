@@ -38,25 +38,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-/**
- * 매일 04:00(KST) TourAPI 증분 동기화.
- *
- * <ol>
- *   <li>변경분: 콘텐츠 종류(12·14·15·32·39)마다 {@code areaBasedSyncList2}로 기준일 이후 바뀐 항목을 1000건씩 받아 upsert한다.
- *       showflag=0(내려감)이면 삭제 표시한다. 좌표가 없거나 기간이 없는 축제는 건너뛴다 (006-01).
- *       동기화 목록에는 축제 기간이 없어서, 먼저 {@code searchFestival2}로 같은 기간에 바뀐 축제의 기간을 받아두고 붙인다.
- *       이미 저장된 축제는 저장된 기간을 쓴다.</li>
- *   <li>운영 정보: 운영 정보를 안 받았거나 30일 지난 관광지·축제를 오래된 순으로 {@code tour-api.sync.intro-per-run}건까지
- *       {@code detailIntro2}로 받는다. 3만 건을 하루 한도(1000회) 안에서 나눠 받기 위한 것이다.</li>
- *   <li>변경분을 끝까지 받았으면 기준일을 오늘로 옮긴다. 한도 초과로 중간에 멈췄으면 옮기지 않고 PARTIAL로 끝내서 다음 실행이 같은 기준일부터 다시 받는다
- *       (upsert라서 같은 항목을 다시 받아도 결과가 같다).</li>
- *   <li>콘텐츠가 바뀌었으니 AI 추천 후보 캐시({@code candidates:*})를 지운다.</li>
- * </ol>
- * 예외로 멈추면 FAILED로 기록하고 알림을 보낸다. 콘텐츠가 하나도 없고 기준일도 없으면 아무것도 하지 않는다
- * (전체 적재는 API 호출 수가 한도를 크게 넘어서 CSV로만 한다).
- *
- * 테스트는 batch.enabled=false로 스케줄을 끄고 {@link #run()}을 직접 부른다.
- */
 @Slf4j
 @Component
 public class TourSyncJob {
@@ -64,7 +45,6 @@ public class TourSyncJob {
     static final List<Integer> TOUR_TYPE_IDS = List.of(12, 14, 15, 32, 39);
     private static final int FESTIVAL_TYPE_ID = 15;
     private static final Duration INTRO_REFRESH_AFTER = Duration.ofDays(30);
-    // 기준일 이후에 바뀐 축제 중 이 기간 안에 시작하는 것까지 기간을 받는다 (CSV 수집과 같은 1년)
     private static final int FESTIVAL_LOOKBACK_DAYS = 365;
     private static final int PURGE_BATCH = 500;
 
@@ -135,7 +115,6 @@ public class TourSyncJob {
         }
     }
 
-    /** @return 한도 초과 없이 끝까지 받았으면 true */
     private boolean syncChanges(LocalDate since, LocalDate today, Progress progress) {
         ContentLoadContext context = contentService.loadContext();
         try {
@@ -219,7 +198,6 @@ public class TourSyncJob {
         progress.deleted += contentService.markDeleted(hiddenIds);
     }
 
-    /** @return 한도 초과 없이 끝났으면 true */
     private boolean backfillIntro(Progress progress) {
         LocalDateTime before = LocalDateTime.now(clock).minus(INTRO_REFRESH_AFTER);
         List<IntroTarget> targets = contentService.findIntroTargets(properties.sync().introPerRun(), before);
@@ -230,7 +208,6 @@ public class TourSyncJob {
                     Map<String, String> item = tourApiClient.detailIntro(target.contentId(), target.tourContentTypeId());
                     progress.apiCalls++;
                     TourIntro intro = TourApiItems.toIntro(item);
-                    // 운영 정보가 아예 없는 콘텐츠도 받은 것으로 표시해서 매일 다시 부르지 않게 한다
                     contentService.applyIntro(target.contentId(), intro != null ? intro : emptyIntro());
                     progress.intro++;
                     lastId = target.contentId();
@@ -253,7 +230,6 @@ public class TourSyncJob {
         }
     }
 
-    // KEYS는 Redis를 멈추게 해서 쓰지 않고 SCAN으로 조금씩 찾는다. 캐시라서 지우지 못해도 TTL이 지나면 사라진다
     private void purgeCandidateCache() {
         ScanOptions options = ScanOptions.scanOptions().match(ContentRedisKeys.candidatesPattern()).count(PURGE_BATCH).build();
         try (Cursor<String> cursor = redisTemplate.scan(options)) {

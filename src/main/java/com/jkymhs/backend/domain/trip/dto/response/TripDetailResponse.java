@@ -9,9 +9,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/**
- * 여행 상세 (일정안 목록 포함, 일정안 id 순).
- */
 public record TripDetailResponse(
         Long id,
         String title,
@@ -26,10 +23,6 @@ public record TripDetailResponse(
         int version,
         List<PlanSummary> plans
 ) {
-
-    /**
-     * @param fullName "서울 중구" (시·도면 "서울")
-     */
     public record Region(Long id, String name, String fullName) {
     }
 

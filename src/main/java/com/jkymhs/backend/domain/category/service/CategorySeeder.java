@@ -20,13 +20,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * 서버가 뜰 때마다 {@link CategorySeed}를 DB에 맞춘다. 코드(code)로 찾아서 없으면 넣고, 있으면 이름·순서를 고친다 (id는 유지).
- * 매핑도 시드와 같아지도록 빠진 것은 넣고 시드에 없는 것은 지운다. 몇 번을 돌려도 결과가 같다.
- *
- * 순서가 1번인 이유: CSV 적재(TourCsvImporter, 2번)가 콘텐츠의 category_id를 정할 때 카테고리가 이미 있어야 한다.
- * 테스트는 매 테스트 뒤 테이블을 비우므로, 카테고리가 필요한 테스트는 {@link #seed()}를 직접 부른다.
- */
 @Slf4j
 @Component
 @Order(1)

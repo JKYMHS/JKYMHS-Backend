@@ -6,10 +6,6 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
-/**
- * 적재할 콘텐츠 한 건 (contents.csv 한 줄 또는 TourAPI 목록 항목 하나). 지역·카테고리는 아직 코드 상태이고,
- * {@link ContentService#upsert}가 {@link ContentLoadContext}로 id를 찾아 넣는다.
- */
 public record ContentSource(
         Long id,
         ContentType contentType,
@@ -30,11 +26,6 @@ public record ContentSource(
         LocalDateTime tourModifiedAt
 ) {
 
-    /**
-     * 기능 명세서 006-01: 좌표가 없으면 지도·경로에 쓸 수 없고, 축제는 기간이 없으면 진행 상태를 정할 수 없어서 적재하지 않는다.
-     *
-     * @return 적재하지 않는 이유. 적재해도 되면 null
-     */
     public String skipReason() {
         if (id == null || contentType == null || name == null || name.isBlank()) {
             return "id·종류·이름 없음";

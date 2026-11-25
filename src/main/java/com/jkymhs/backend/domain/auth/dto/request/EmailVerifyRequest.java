@@ -23,7 +23,6 @@ public record EmailVerifyRequest(
         String code
 ) {
 
-    // 발송 요청과 같은 규칙으로 정규화해야 같은 Redis 키를 찾는다
     public EmailVerifyRequest {
         email = email == null ? null : email.trim().toLowerCase(Locale.ROOT);
     }

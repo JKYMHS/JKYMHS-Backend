@@ -31,14 +31,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * 여행 API (모두 로그인 필요). 다른 회원의 여행은 403, 없는 여행은 404.
- */
 @RestController
 @RequestMapping("/api/trips")
 @RequiredArgsConstructor
 public class TripController {
-
     private final TripService tripService;
     private final TripListService tripListService;
     private final PlanService planService;

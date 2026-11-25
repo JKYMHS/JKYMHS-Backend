@@ -20,15 +20,11 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-/**
- * 일정안. 여행 하나에 최대 10개까지 만들고 비교한다 (직접 만든 안, AI 추천 안 등). 장소 목록은 plan_items에 있다.
- */
 @Getter
 @Entity
 @Table(name = "plans", indexes = @Index(name = "idx_plans_trip_id", columnList = "trip_id, id"))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Plan extends BaseTimeEntity {
-
     public static final int NAME_MAX_LENGTH = 30;
 
     @Id
@@ -52,14 +48,11 @@ public class Plan extends BaseTimeEntity {
     @Column(nullable = false, length = 10)
     private PlanSource source;
 
-    // AI 추천 요청 id (AI로 만든 안만). 추천 요청은 24시간 뒤 정리되므로 FK를 걸지 않는다
     private Long aiRequestId;
 
-    // 일정 항목의 이동 시간 합계. 목록·비교 화면에서 항목을 다 읽지 않으려고 저장해 둔다
     @Column(nullable = false)
     private int totalMoveMinutes;
 
-    // 전체 저장(PUT) 충돌 확인용 버전 (G10)
     @Column(nullable = false)
     private int version;
 

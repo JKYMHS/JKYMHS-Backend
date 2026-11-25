@@ -15,17 +15,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-/**
- * ODsay 대중교통 길찾기 ({@code GET /searchPubTransPathT}). 첫 번째 경로의 소요 시간·거리·노선 요약만 쓴다.
- *
- * 실패(키 없음, HTTP 오류, 타임아웃, {@code {"error": …}} 응답 — 예: 700m 이내 -98)는 빈 Optional이다.
- * ODsay는 오류도 HTTP 200에 error 객체로 주는 경우가 많아서 본문을 보고 판단한다.
- *
- * 좌표: SX/EX = 경도, SY/EY = 위도. apiKey에는 '+', '/' 같은 문자가 들어 있어서 값 전체를 인코딩한다 ({@code encode()} 후 변수 확장).
- */
 @Slf4j
 public class OdsayClient {
-
     private static final int SUBWAY = 1;
     private static final int BUS = 2;
 
@@ -83,7 +74,6 @@ public class OdsayClient {
         return Optional.of(new TransitRoute(minutes, info.path("totalDistance").asInt(0), summary(path.path("subPath"))));
     }
 
-    // 탄 노선만 순서대로 잇는다 (걷는 구간 trafficType 3은 뺀다)
     private static String summary(JsonNode subPaths) {
         List<String> legs = new ArrayList<>();
         for (JsonNode subPath : subPaths) {

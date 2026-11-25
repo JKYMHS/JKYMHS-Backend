@@ -6,10 +6,6 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Component;
 
-/**
- * 인증 코드 메일을 만들어서 보낸다.
- * 메일 내용과 발송을 코드 생성 로직(EmailVerificationService)과 나눠 두면, 테스트에서 JavaMailSender만 가짜로 바꿔 끼울 수 있다.
- */
 @Component
 public class VerificationMailSender {
 
@@ -23,9 +19,6 @@ public class VerificationMailSender {
         this.from = from;
     }
 
-    /**
-     * SMTP 서버에 보낼 때까지 기다린다(동기). 실패하면 MailException을 던진다.
-     */
     public void send(String to, String code) throws MailException {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(from);

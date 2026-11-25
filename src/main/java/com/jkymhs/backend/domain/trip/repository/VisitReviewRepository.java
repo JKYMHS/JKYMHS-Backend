@@ -8,14 +8,12 @@ import org.springframework.data.jpa.repository.Query;
 import java.util.Collection;
 import java.util.List;
 
-// 벌크 삭제 후 영속성 컨텍스트를 비우지 않는다 (같은 트랜잭션에서 잠근 여행·일정안 엔티티를 계속 고쳐야 해서). 지운 행의 엔티티는 다시 쓰지 않는다
+// 벌크 삭제 후 영속성 컨텍스트를 비우지 않음 (엔티티 계속 사용)
 public interface VisitReviewRepository extends JpaRepository<VisitReview, Long> {
-
     List<VisitReview> findAllByPlanItemIdIn(Collection<Long> planItemIds);
 
     long countByPlanItemIdIn(Collection<Long> planItemIds);
 
-    // 일정 항목을 지우기 전에 먼저 지운다 (visit_reviews.plan_item_id FK)
     @Modifying(flushAutomatically = true)
     @Query("delete from VisitReview r where r.planItemId in :planItemIds")
     int deleteAllByPlanItemIdIn(Collection<Long> planItemIds);

@@ -18,14 +18,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * 끝난 여행의 방문 확인 API.
- */
 @RestController
 @RequestMapping("/api/trips")
 @RequiredArgsConstructor
 public class VisitCheckController {
-
     private final VisitCheckService visitCheckService;
 
     @GetMapping("/visit-check/pending")

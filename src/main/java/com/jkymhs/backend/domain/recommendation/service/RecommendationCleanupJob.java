@@ -9,19 +9,10 @@ import org.springframework.stereotype.Component;
 import java.time.Clock;
 import java.time.LocalDateTime;
 
-/**
- * 매시 30분(KST)에 추천 요청을 정리한다.
- * <ul>
- *   <li>24시간 지난 요청의 출발지 좌표·주소를 지운다. 현재 위치일 수 있어서 결과를 볼 수 있는 동안만 둔다 (§5 Q11).</li>
- *   <li>10분 넘게 PENDING인 요청을 FAILED로 바꾼다. 작업 중에 서버가 꺼지면 영원히 PENDING으로 남아 FE가 계속 기다리기 때문이다.
- *       FAILED는 횟수에서 빠지므로 자동으로 돌려준 셈이 된다.</li>
- * </ul>
- */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class RecommendationCleanupJob {
-
     private final RecommendationRequestRepository requestRepository;
     private final RecommendationProperties properties;
     private final Clock clock;

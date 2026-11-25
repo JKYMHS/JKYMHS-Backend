@@ -6,13 +6,6 @@ import com.jkymhs.backend.global.web.CodeEnum;
 import java.util.EnumSet;
 import java.util.Set;
 
-/**
- * 탐색 홈·검색 시작 화면의 빠른 칩. 하나만 고를 수 있다. FE 값은 소문자다.
- *
- * 분류 칩(palace_village 등)은 categories 표의 CHIP 묶음 코드와 같은 값이라
- * {@code CategoryService.lclsCodesOf(code())}로 분류 코드를 얻는다 (어떤 분류가 들어가는지는 시드 표가 정한다).
- * all은 FE의 "전체" 칩이라 거르지 않는다.
- */
 public enum ContentChip implements CodeEnum {
     ALL("all", false, EnumSet.allOf(CategoryTab.class)),
     ONGOING("ongoing", false, EnumSet.of(CategoryTab.FESTIVAL)),
@@ -40,7 +33,6 @@ public enum ContentChip implements CodeEnum {
         return code;
     }
 
-    /** 분류 코드(lcls1/2/3)로 거르는 칩인지 */
     public boolean isClassification() {
         return classification;
     }

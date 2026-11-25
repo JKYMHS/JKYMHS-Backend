@@ -16,16 +16,12 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/**
- * 여행 지역 (여행 하나에 1~5개). 시·도나 시·군·구 id를 그대로 저장한다.
- */
 @Getter
 @Entity
 @Table(name = "trip_regions", uniqueConstraints = @UniqueConstraint(
         name = "uk_trip_regions_trip_id_region_id", columnNames = {"trip_id", "region_id"}))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class TripRegion {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

@@ -35,19 +35,10 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-/**
- * 여행 업로드 미리보기·업로드·일괄 업로드·실패만 다시.
- *
- * 업로드 요청은 구글을 직접 부르지 않는다. 할 일(작업 항목)을 정해서 작업 행으로 넣고 202를 준다 ({@link CalendarSyncJob} 주석).
- * 할 일 정하기: 항목을 고른 캘린더와 같게 만든다 ({@link CalendarJobOp#upsert}).
- * 고른 캘린더가 이 여행이 쓰던 캘린더와 다르면, 이미 올라간 나머지 일정도 같은 작업에서 새 캘린더로 옮긴다
- * (한 여행의 일정이 두 캘린더에 흩어지지 않게, PRD "캘린더를 바꾸면 이미 올린 일정을 옮긴다").
- */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class CalendarUploadService {
-
     static final int BULK_MAX_TRIPS = 10;
     private static final String BULK_LIMIT_MESSAGE = "한 번에 최대 " + BULK_MAX_TRIPS + "개 여행까지 올릴 수 있습니다.";
     private static final String ITEM_NOT_IN_PLAN = "확정 일정안에 없는 항목이 포함되어 있습니다.";
@@ -58,8 +49,6 @@ public class CalendarUploadService {
     private final CalendarJobService jobService;
     private final GoogleCalendarLinkRepository linkRepository;
     private final CalendarSyncJobItemRepository jobItemRepository;
-
-    // ---------- 미리보기 ----------
 
     public CalendarPreviewResponse preview(Long userId, Long tripId) {
         CalendarTrip trip = tripCalendarSupport.confirmedTrip(userId, tripId);
@@ -82,17 +71,11 @@ public class CalendarUploadService {
     private static Integer durationMinutes(CalendarItem item) {
         if (item.startTime() != null && item.endTime() != null) {
             long minutes = Duration.between(item.startTime(), item.endTime()).toMinutes();
-            // 끝 시각이 자정을 넘긴 경우 (22:00 ~ 01:00)
             return (int) (minutes > 0 ? minutes : minutes + Duration.ofDays(1).toMinutes());
         }
         return item.stayMinutes();
     }
 
-    // ---------- 여행 하나 업로드 ----------
-
-    /**
-     * 확인 순서: 여행(404/403) → 확정안(400) → 고른 항목이 확정안 것인지(400) → 연동(403) → 진행 중 작업(409).
-     */
     @Transactional
     public CalendarUploadResponse upload(Long userId, Long tripId, CalendarUploadRequest request) {
         CalendarTrip trip = tripCalendarSupport.confirmedTrip(userId, tripId);
@@ -109,7 +92,6 @@ public class CalendarUploadService {
         return new CalendarUploadResponse(job.getId(), ops.size(), CalendarJobService.POLL_AFTER_MS);
     }
 
-    // itemIds가 없으면 아직 동기화되지 않은 항목 전부 (FE 기본 선택: synced 빼고 체크)
     private static List<CalendarItem> select(CalendarTrip trip, List<Long> itemIds) {
         if (itemIds == null) {
             return trip.items().stream().filter(item -> item.state() != CalendarState.SYNCED).toList();
@@ -130,7 +112,6 @@ public class CalendarUploadService {
         return selected;
     }
 
-    /** 고른 항목 + (캘린더를 바꿨으면) 이미 다른 캘린더에 올라간 나머지 항목의 이동 */
     private static List<CalendarJobOp> opsFor(CalendarTrip trip, List<CalendarItem> selected, String calendarId) {
         List<CalendarJobOp> ops = new ArrayList<>(selected.stream().map(item -> CalendarJobOp.upsert(item, calendarId))
                 .toList());
@@ -142,12 +123,6 @@ public class CalendarUploadService {
         return ops;
     }
 
-    // ---------- 일괄 업로드 ----------
-
-    /**
-     * 연동 직후 "다른 여행도 올릴까요?" 모달. 지난 여행도 올릴 수 있다 (FE가 기본 선택만 끈다).
-     * 확정안이 없는 여행, 올릴 것이 없는 여행은 건너뛰고 이유를 알려준다. 모두 건너뛰면 할 일 없는 작업(바로 DONE)이 만들어진다.
-     */
     @Transactional
     public CalendarBulkUploadResponse bulkUpload(Long userId, CalendarBulkUploadRequest request) {
         if (request.type() != CalendarJobType.BULK_UPLOAD) {
@@ -182,12 +157,6 @@ public class CalendarUploadService {
         return new CalendarBulkUploadResponse(job.getId(), results);
     }
 
-    // ---------- 실패만 다시 ----------
-
-    /**
-     * 끝난 작업의 실패 항목만 새 작업으로 다시 올린다. 지금 항목 값으로 할 일을 다시 정한다
-     * (그사이 항목이 지워졌으면 건너뛰고, 다른 작업이 먼저 올렸으면 UPDATE가 된다).
-     */
     @Transactional
     public CalendarRetryResponse retryFailed(Long userId, Long jobId) {
         CalendarSyncJob source = jobService.ownedJob(userId, jobId);

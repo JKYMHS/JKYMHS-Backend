@@ -17,17 +17,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * 코스 계획에 이동(4단계 ROUTES)과 시각·식사 칸(5단계 MEALS)을 붙여 화면에 낼 코스로 만든다.
- *
- * 경로: 코스 3개의 모든 구간(그날 출발점 → 첫 장소, 장소 → 다음 장소)을 모아 중복을 빼고 {@link RouteService#routes} 한 번으로
- * 계산한다. 둘째 날부터의 출발점은 전날 마지막 장소다. 제한 시간이 지났으면 외부 API 없이 캐시·어림값만 쓴다.
- * 식사 칸의 주변 음식점 수는 바로 앞 장소(없으면 그날 출발점) 1km 안의 음식점 수다.
- */
 @Component
 @RequiredArgsConstructor
 public class CourseAssembler {
-
     static final int NEARBY_RESTAURANT_RADIUS_METERS = 1000;
 
     private final RouteService routeService;

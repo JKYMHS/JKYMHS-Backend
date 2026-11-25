@@ -11,9 +11,6 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
-/**
- * 동기화 배치 진행 위치 읽기·쓰기.
- */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)

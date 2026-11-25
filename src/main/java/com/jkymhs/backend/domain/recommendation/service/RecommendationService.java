@@ -49,19 +49,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-/**
- * AI 추천 요청·다시 추천·결과 조회·남은 횟수.
- *
- * <b>요청 흐름</b>: 입력 검증 → (트랜잭션) 회원 행 잠금 → 같은 조건 PENDING이 10초 안에 있으면 그 요청을 돌려줌 → 오늘 횟수 확인(429)
- * → PENDING 행 저장 → 커밋 → 실행기에 작업을 넣고 202. 회원 행을 잠그는 이유: 같은 회원이 동시에 두 번 눌러도 "센 다음 넣기"가
- * 겹치지 않아 10회를 넘기지 않는다. 작업은 커밋 뒤에 넣는다 (커밋 전에 넣으면 작업 스레드가 아직 없는 행을 읽을 수 있다).
- *
- * <b>횟수</b>: 오늘(KST) 만든 요청 중 FAILED가 아닌 것. 기본 코스(FALLBACK)도 결과를 받았으니 센다.
- */
 @Slf4j
 @Service
 public class RecommendationService {
-
     static final long POLL_AFTER_MS = 2000;
     static final int MAX_DAYS = 4;
     static final int MAX_REQUIRED = 5;
@@ -112,8 +102,6 @@ public class RecommendationService {
         this.clock = clock;
     }
 
-    // ---------- 남은 횟수 ----------
-
     public RecommendationQuotaResponse quota(Long userId) {
         LocalDate today = LocalDate.now(clock);
         int used = (int) usedToday(userId, today);
@@ -125,12 +113,6 @@ public class RecommendationService {
                 new RecommendationQuotaResponse.Defaults(lastCompanion, startTime));
     }
 
-    // ---------- 요청 ----------
-
-    /**
-     * @throws CustomException 400 SCHEDULE_LIMIT_EXCEEDED(기간·지난 날짜·꼭 포함 6개 이상), 400 INVALID_INPUT(아이 나이, 지역),
-     *                         403/404 targetTripId, 404 꼭 포함 장소, 429 AI_DAILY_LIMIT_EXCEEDED, 503 AI_SERVICE_UNAVAILABLE
-     */
     public RecommendationAcceptedResponse create(Long userId, RecommendationCreateRequest body) {
         LocalDateTime now = LocalDateTime.now(clock);
         validatePeriod(body.startDate(), body.endDate(), now.toLocalDate());
@@ -160,11 +142,6 @@ public class RecommendationService {
                 submitted.left(), POLL_AFTER_MS, warnings);
     }
 
-    /**
-     * 직전 결과와 같은 조건으로 한 번 더 추천한다 (1회 차감). 빼달라고 한 곳과 직전 코스의 장소는 점수를 깎는다.
-     *
-     * @throws CustomException 404 이전 결과 만료, 429, 503
-     */
     public RecommendationAcceptedResponse retry(Long userId, Long requestId, RecommendationRetryRequest body) {
         LocalDateTime now = LocalDateTime.now(clock);
         RecommendationRequest previous = requestRepository.findByIdAndUserId(requestId, userId)
@@ -188,11 +165,6 @@ public class RecommendationService {
                 submitted.left(), POLL_AFTER_MS, List.of());
     }
 
-    // ---------- 결과 ----------
-
-    /**
-     * @throws CustomException 404 "추천 결과가 만료되었거나 존재하지 않습니다." (다른 회원, 만료, Redis 결과 없음)
-     */
     public RecommendationStatusResponse getStatus(Long userId, Long requestId) {
         LocalDateTime now = LocalDateTime.now(clock);
         RecommendationRequest request = requestRepository.findByIdAndUserId(requestId, userId)
@@ -217,8 +189,6 @@ public class RecommendationService {
             }
         };
     }
-
-    // ---------- 내부 ----------
 
     private Submitted submit(Long userId, RecommendationConditions conditions, List<Long> districtIds,
                              List<Long> requiredIds, PlanSource source, Long previousRequestId, List<Long> excludedIds,
@@ -287,7 +257,6 @@ public class RecommendationService {
         }
     }
 
-    // 꼭 포함할 장소가 없거나 지워졌으면 404, 기간·지역이 안 맞으면 경고만 (FE: 고를 수는 있게 둔다, §4 #22)
     private List<RecommendationAcceptedResponse.Warning> requiredWarnings(List<Long> requiredIds,
                                                                           RecommendationCreateRequest body,
                                                                           List<Long> districtIds) {

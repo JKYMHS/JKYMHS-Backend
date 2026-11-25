@@ -14,10 +14,6 @@ import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 
-/**
- * 동기화 배치가 어디까지 했는지. 서버가 재시작돼도 이어서 하려고 Redis가 아니라 DB에 둔다.
- * updated_at만 있어서 BaseTimeEntity를 상속하지 않고, 시각은 Clock으로 받은 값을 직접 넣는다 (테스트에서 시계를 고정할 수 있게).
- */
 @Getter
 @Entity
 @Table(name = "tour_sync_cursors")

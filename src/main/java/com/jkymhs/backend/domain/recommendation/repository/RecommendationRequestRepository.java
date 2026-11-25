@@ -14,24 +14,16 @@ import java.util.List;
 import java.util.Optional;
 
 public interface RecommendationRequestRepository extends JpaRepository<RecommendationRequest, Long> {
-
     Optional<RecommendationRequest> findByIdAndUserId(Long id, Long userId);
 
-    // 오늘(KST) 쓴 횟수: FAILED는 빼고 센다 (idx_recommendation_requests_user_id_request_date)
     long countByUserIdAndRequestDateAndStatusNot(Long userId, LocalDate requestDate, RecommendationStatus status);
 
-    // 같은 조건으로 방금 보낸 PENDING 요청 (중복 방지)
     Optional<RecommendationRequest> findFirstByUserIdAndStatusAndConditionsKeyAndRequestedAtAfterOrderByIdDesc(
             Long userId, RecommendationStatus status, String conditionsKey, LocalDateTime after);
 
     @Query("select r.id from RecommendationRequest r where r.userId = :userId")
     List<Long> findIdsByUserId(Long userId);
 
-    /**
-     * PENDING일 때만 상태를 바꾼다. 작업이 끝나는 순간과 정리 배치(10분 넘은 PENDING → FAILED)가 겹쳐도 한쪽만 이긴다.
-     *
-     * @return 바뀐 행 수 (0이면 이미 다른 상태)
-     */
     @Transactional
     @Modifying(clearAutomatically = true)
     @Query("""

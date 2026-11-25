@@ -21,14 +21,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * AI 코스 추천. 요청·다시 추천은 작업을 실행기에 넣고 202로 바로 답한다. FE는 pollAfterMs(2초)마다 결과 API를 부른다.
- */
 @RestController
 @RequestMapping("/api/recommendations")
 @RequiredArgsConstructor
 public class RecommendationController {
-
     private final RecommendationService recommendationService;
     private final RecommendationSaveService recommendationSaveService;
 

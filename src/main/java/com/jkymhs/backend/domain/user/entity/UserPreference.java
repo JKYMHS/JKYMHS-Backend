@@ -19,13 +19,6 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-/**
- * 회원 한 명의 취향(여행 속도·시작 시간대·이동 편의·반려동물). 회원마다 최대 한 행이다.
- * 여행 스타일은 여러 개라서 {@link UserTravelStyle}에 따로 저장한다.
- *
- * 온보딩을 건너뛴 회원은 이 행이 없다. 기본값(RELAXED·MORNING 등)을 저장하지 않고 쓸 때 채운다
- * (PreferenceService.getEffective). 저장해 두면 "직접 고른 값"과 "기본값"을 구분할 수 없기 때문이다.
- */
 @Getter
 @Entity
 @Table(name = "user_preferences", uniqueConstraints = {
@@ -38,7 +31,6 @@ public class UserPreference extends BaseTimeEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // 회원당 한 행이라 1:1. user_id UNIQUE가 "한 행"을 DB에서도 보장한다
     @OneToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
@@ -53,12 +45,9 @@ public class UserPreference extends BaseTimeEntity {
     @Column(nullable = false, length = 20)
     private TimeOfDay timeOfDay;
 
-    // 유모차·휠체어·오래 걷기 어려움을 하나로 묶은 값 (FE가 한 체크박스로 받는다)
-    // ACCESSIBLE은 MySQL 예약어라서 컬럼 이름으로 쓰면 CREATE TABLE이 문법 오류로 실패한다. 그래서 컬럼 이름만 바꿨다
     @Column(name = "accessible_only", nullable = false)
     private boolean accessible;
 
-    // 반려동물 동반 가능 장소만 추천
     @Column(nullable = false)
     private boolean pet;
 
@@ -74,7 +63,6 @@ public class UserPreference extends BaseTimeEntity {
         return new UserPreference(user, pace, timeOfDay, accessible, pet);
     }
 
-    // 마이페이지에서 다시 저장하면 전체를 바꾼다 (PUT)
     public void update(Pace pace, TimeOfDay timeOfDay, boolean accessible, boolean pet) {
         this.pace = pace;
         this.timeOfDay = timeOfDay;

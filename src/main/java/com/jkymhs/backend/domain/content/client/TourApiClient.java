@@ -26,23 +26,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * 한국관광공사 TourAPI(KorService2) 호출.
- *
- * <ul>
- *   <li>호출 수: 공공데이터포털 개발 계정 키는 하루 호출 수가 정해져 있다. 시도할 때마다 Redis {@code tourapi:calls:{yyyyMMdd}}를 INCR하고,
- *       한도에 닿으면 실제로 부르지 않고 {@link TourApiQuotaExceededException}을 던진다. 서버를 여러 대 띄워도 같은 수를 센다.</li>
- *   <li>한도 초과 응답: 포털은 키 오류·한도 초과를 {@code _type=json}이어도 XML로 준다. XML 본문이나 LIMITED_NUMBER… 메시지는 한도 초과로 본다.</li>
- *   <li>재시도: 5xx와 네트워크 오류(타임아웃 포함)만 최대 3번 시도한다. n번째 재시도 전에 n × {@code retry-backoff}만큼 기다린다.
- *       4xx는 다시 불러도 같은 결과라 바로 실패한다.</li>
- * </ul>
- *
- * 서비스 키는 Decoding 키를 받아서 URI를 만들 때 한 번만 인코딩한다 ('+', '/', '='가 %2B 등으로 바뀐다).
- * Encoding 키를 넣으면 두 번 인코딩돼서 SERVICE_KEY_IS_NOT_REGISTERED 오류가 난다.
- *
- * RestClient.Builder를 생성자로 받는 이유: 테스트에서 MockRestServiceServer를 붙인 Builder를 넣어 실제 TourAPI 없이 응답을 흉내 내기 위해서다.
- * 실제 빈은 {@link TourApiConfig}가 만든다.
- */
 @Slf4j
 public class TourApiClient {
 
@@ -70,20 +53,14 @@ public class TourApiClient {
         return properties.hasServiceKey();
     }
 
-    /** 법정동 시·도·시·군·구 코드 전체 */
     public TourApiPage ldongCodes(int pageNo) {
         return call("ldongCode2", page(pageNo, "lDongListYn", "Y"));
     }
 
-    /** 신 분류체계 대·중·소 코드 전체 */
     public TourApiPage lclsSystmCodes(int pageNo) {
         return call("lclsSystmCode2", page(pageNo, "lclsSystmListYn", "Y"));
     }
 
-    /**
-     * {@code modifiedSince} 날짜 이후에 바뀐 콘텐츠. 내려간 콘텐츠도 showflag=0으로 같이 온다 (showflag를 보내지 않으면 둘 다 준다).
-     * 축제 기간(eventstartdate)은 이 응답에 없다.
-     */
     public TourApiPage areaBasedSyncList(int contentTypeId, LocalDate modifiedSince, int pageNo) {
         Map<String, String> params = page(pageNo, "contentTypeId", String.valueOf(contentTypeId));
         params.put("modifiedtime", modifiedSince.format(YYYYMMDD));
@@ -97,11 +74,6 @@ public class TourApiClient {
         return call("areaBasedList2", params);
     }
 
-    /**
-     * {@code eventStartDate} 이후에 시작하는 축제 (기간 포함).
-     *
-     * @param modifiedSince null이면 수정일로 거르지 않는다
-     */
     public TourApiPage searchFestival(LocalDate eventStartDate, LocalDate modifiedSince, int pageNo) {
         Map<String, String> params = page(pageNo, "eventStartDate", eventStartDate.format(YYYYMMDD));
         if (modifiedSince != null) {
@@ -111,12 +83,10 @@ public class TourApiClient {
         return call("searchFestival2", params);
     }
 
-    /** 소개글·홈페이지 등. 없으면 null */
     public Map<String, String> detailCommon(long contentId) {
         return first(call("detailCommon2", single("contentId", String.valueOf(contentId))));
     }
 
-    /** 운영 시간·쉬는 날·요금 등 (contentTypeId마다 필드 이름이 다르다). 없으면 null */
     public Map<String, String> detailIntro(long contentId, int contentTypeId) {
         Map<String, String> params = single("contentId", String.valueOf(contentId));
         params.put("contentTypeId", String.valueOf(contentTypeId));
@@ -130,12 +100,10 @@ public class TourApiClient {
         return call("detailImage2", params).items();
     }
 
-    /** 반려동물 동반 정보. 없으면 null */
     public Map<String, String> detailPetTour(long contentId) {
         return first(call("detailPetTour2", single("contentId", String.valueOf(contentId))));
     }
 
-    /** 오늘 센 호출 수 (Redis가 안 되면 0) */
     public int todayCallCount() {
         try {
             String value = redisTemplate.opsForValue().get(ContentRedisKeys.tourApiCalls(LocalDate.now(clock)));
@@ -176,7 +144,6 @@ public class TourApiClient {
         throw new TourApiException(operation + " " + MAX_ATTEMPTS + "회 실패: " + lastError.getMessage(), lastError);
     }
 
-    // 실제로 부르기 전에 센다. 한도에 닿은 뒤의 시도는 TourAPI까지 가지 않는다
     private void countCall(String operation) {
         String key = ContentRedisKeys.tourApiCalls(LocalDate.now(clock));
         Long count;
@@ -186,7 +153,6 @@ public class TourApiClient {
                 redisTemplate.expire(key, CALL_COUNTER_TTL);
             }
         } catch (DataAccessException e) {
-            // 호출 수 집계는 보조 장치다. Redis가 안 되면 세지 않고 부른다 (진짜 한도는 포털이 XML 오류로 알려준다)
             log.warn("TourAPI call counter unavailable: {}", e.getMessage());
             return;
         }
@@ -223,7 +189,6 @@ public class TourApiClient {
             builder.queryParam(entry.getKey(), "{" + variable + "}");
             variables.put(variable, entry.getValue());
         }
-        // encode() 뒤에 값을 채우면 값 안의 '+', '/', '=' 같은 문자까지 모두 인코딩된다
         return builder.encode().buildAndExpand(variables).toUri();
     }
 
@@ -259,7 +224,6 @@ public class TourApiClient {
         }
         JsonNode responseBody = response.path("body");
         List<Map<String, String>> items = new ArrayList<>();
-        // 결과가 없으면 items가 ""로, 한 건이면 item이 배열이 아니라 객체로 올 수 있다
         JsonNode item = responseBody.path("items").path("item");
         if (item.isArray()) {
             for (JsonNode node : item) {
@@ -306,7 +270,6 @@ public class TourApiClient {
         return text != null && text.contains("LIMITED_NUMBER_OF_SERVICE_REQUESTS");
     }
 
-    // 응답 본문에는 서비스 키가 들어 있지 않아서 로그에 남겨도 된다. 너무 길면 자른다
     private static String abbreviate(String text) {
         return text.length() <= 300 ? text : text.substring(0, 300);
     }

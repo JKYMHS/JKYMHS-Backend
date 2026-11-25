@@ -11,7 +11,6 @@ public interface UserConsentRepository extends JpaRepository<UserConsent, Long> 
 
     List<UserConsent> findAllByUserId(Long userId);
 
-    // 탈퇴할 때 DELETE 한 번으로 지운다 (행마다 SELECT 후 DELETE하지 않게)
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("delete from UserConsent c where c.user.id = :userId")
     int deleteAllByUserId(Long userId);

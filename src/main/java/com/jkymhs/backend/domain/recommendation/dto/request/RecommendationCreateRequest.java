@@ -14,15 +14,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 
-/**
- * 추천 요청 (FE RecommendDraft). 기간·꼭 포함 장소 수처럼 문구가 따로 정해진 검사는 서비스에서 한다.
- *
- * @param regionId           시·도 id
- * @param districtIds        그 시·도 아래 시·군·구 id들. 비어 있으면 시·도 전체
- * @param startTime          첫째 날 시작 시각. 없으면 취향의 시작 시간대
- * @param requiredContentIds 꼭 포함할 장소 (순서 있음, 최대 5개). 같은 id가 두 번 오면 한 번만 쓴다
- * @param targetTripId       저장할 때 기본으로 고를 여행 (내 여행이어야 한다)
- */
 public record RecommendationCreateRequest(
         @NotNull(message = "지역을 선택해주세요.") Long regionId,
         List<Long> districtIds,
@@ -36,7 +27,6 @@ public record RecommendationCreateRequest(
         List<Long> requiredContentIds,
         Long targetTripId
 ) {
-
     public List<Long> districtIdList() {
         return distinct(districtIds);
     }
